@@ -408,6 +408,7 @@
             <div id="preview-grid" class="preview-grid">
               <div class="preview-empty">No photos queued yet.</div>
             </div>
+
           </div>
 
           <button id="done-btn">Done - upload photos and publish</button>
@@ -747,8 +748,8 @@
           body: JSON.stringify({
             id: p.id,
             title: p.title,
-            created_at: p.created_at,
-            sku: p.sku || null
+            sku: p.sku || null,
+            created_at: p.created_at
           })
         });
         await loadCurrent();
@@ -772,12 +773,11 @@
           return;
         }
 
-        currentTitleEl.textContent = data.product.title;
+        const skuText = data.product.sku || 'none';
 
-        const skuText = data.product.sku ? data.product.sku : 'none';
+        currentTitleEl.textContent = data.product.title;
         currentMetaEl.textContent =
           `SKU: ${skuText} | ID: ${data.product.id} | Created: ${formatDate(data.product.created_at)}`;
-
         queueCountEl.textContent = data.queuedCount || 0;
       } catch (err) {
         console.error('loadCurrent error', err);
