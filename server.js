@@ -25,7 +25,7 @@ const UPLOADED_DIR = path.join(__dirname, 'Uploaded Photos');
 // Folder where we write cropped square versions for upload
 const CROPPED_DIR = path.join(__dirname, 'CroppedTemp');
 
-let currentProduct = null;    // { id, title, created_at }
+let currentProduct = null;    // { id, title, sku, created_at }
 let queuedFiles = [];         // absolute file paths for current product
 
 // Helper to sanitize product title for Windows folder name
@@ -143,12 +143,17 @@ app.get('/api/products-without-photos', async (req, res) => {
 
 // Select current product to attach upcoming photos to
 app.post('/api/select-product', (req, res) => {
-  const { id, title, created_at } = req.body || {};
+  const { id, title, sku, created_at } = req.body || {};
   if (!id) {
     return res.status(400).json({ error: 'Missing product id' });
   }
 
-  currentProduct = { id, title, created_at };
+  currentProduct = {
+    id,
+    title: title || '',
+    sku: sku || null,
+    created_at: created_at || null
+  };
   queuedFiles = [];
   console.log('Selected product:', currentProduct);
   res.json({ ok: true });
