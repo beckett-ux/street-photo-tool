@@ -73,13 +73,13 @@ app.use(express.static(__dirname));
 
 // API route, last 30 recently created products with no photos
 app.get('/api/products-without-photos', async (req, res) => {
+  console.log('GET /api/products-without-photos');
   try {
-    console.log('GET /api/products-without-photos');
-    const products = await getRecentProductsWithoutImages(30);
+    const products = await getRecentProductsWithoutImages(100);
     res.json(products);
   } catch (err) {
-    console.error('products-without-photos error', err);
-    res.status(500).json({ error: 'Failed to fetch products from Shopify' });
+    console.error('Error in /api/products-without-photos', err);
+    res.status(500).json({ error: 'Failed to load products' });
   }
 });
 
