@@ -638,4 +638,438 @@
     }
 
     function renderProductList(products) {
-      productListEl.innerHT
+      productListEl.innerHTML = '';
+      products.forEach(p => {
+        const row = document.createElement('div');
+        row.className = 'product-row';
+
+        const main = document.createElement('div');
+        main.className = 'product-main';
+
+        const title = document.createElement('div');
+        title.className = 'product-title';
+        title.textContent = p.title;
+
+        const meta = document.createElement('div');
+        meta.className = 'product-meta';
+
+        const skuText = p.sku ? p.sku : 'none';
+        meta.textContent =
+          `SKU: ${skuText} | ID: ${p.id} | Status: ${p.status || 'unknown'} | Created: ${formatDate(p.created_at)}`;
+
+        main.appendChild(title);
+        main.appendChild(meta);
+
+        const btn = document.createElement('button');
+        btn.textContent = 'Select';
+        btn.addEventListener('click', () => selectProduct(p));
+
+        row.appendChild(main);
+        row.appendChild(btn);
+
+        productListEl.appendChild(row);
+      });
+    }
+
+    function updateProductListFromSearch() {
+      if (!allProducts.length) {
+        productListEl.innerHTML =
+          '<div class="product-empty">No recent products without photos found.</div>';
+        return;
+      }
+
+      const term = searchInputEl ? searchInputEl.value.trim().toLowerCase() : '';
+      const filtered = term
+        ? allProducts.filter(p => {
+            const title = (p.title || '').toLowerCase();
+            const idStr = String(p.id || '');
+            const skuStr = (p.sku || '').toLowerCase();
+            return (
+              title.includes(term) ||
+              idStr.includes(term) ||
+              skuStr.includes(term)
+            );
+          })
+        : allProducts;
+
+      if (!filtered.length) {
+        productListEl.innerHTML =
+          '<div class="product-empty">No products match this search.</div>';
+        return;
+      }
+
+      renderProductList(filtered);
+    }
+
+    async function loadProducts() {
+      productListEl.innerHTML = '<div class="product-empty">Loading...</div>';
+      try {
+        const params = new URLSearchParams();
+        if (selectedStore) {
+          params.set('store', selectedStore);
+        }
+        const url = '/api/products-without-photos' + (params.toString() ? `?${params.toString()}` : '');
+
+        const res = await fetch(url);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const products = await res.json();
+
+        allProducts = products || [];
+
+        if (!allProducts.length) {
+          productListEl.innerHTML =
+            '<div class="product-empty">No recent products without photos found.</div>';
+          return;
+        }
+
+        updateProductListFromSearch();
+      } catch (err) {
+        console.error('loadProducts error', err);
+        productListEl.innerHTML =
+          '<div class="product-empty">Error loading products. Check the Node console.</div>';
+      }
+    }
+
+    function attachDragHandlers(item, index) {
+      item.draggable = true;
+      item.dataset.index = String(index);
+
+      item.addEventListener('dragstart', handlePreviewDragStart);
+      item.addEventListener('dragover', handlePreviewDragOver);
+      item.addEventListener('drop', handlePreviewDrop);
+      item.addEventListener('dragend', handlePreviewDragEnd);
+      item.addEventListener('dragenter', handlePreviewDragEnter);
+      item.addEventListener('dragleave', handlePreviewDragLeave);
+    }
+
+    function handlePreviewDragStart(e) {
+      const idx = Number(this.dataset.index);
+      dragSrcIndex = isNaN(idx) ? null : idx;
+      this.classList.add('dragging');
+      if (e.dataTransfer) {
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', '');
+      }
+    }
+
+    function handlePreviewDragOver(e) {
+      e.preventDefault();
+      if (e.dataTransfer) {
+        e.dataTransfer.dropEffect = 'move';
+      }
+    }
+
+    function handlePreviewDragEnter(e) {
+      e.preventDefault();
+      this.classList.add('drag-over');
+    }
+
+    function handlePreviewDragLeave(e) {
+      this.classList.remove('drag-over');
+    }
+
+    function handlePreviewDrop(e) {
+      e.preventDefault();
+      this.classList.remove('drag-over');
+      const targetIdx = Number(this.dataset.index);
+      if (dragSrcIndex === null || isNaN(targetIdx) || dragSrcIndex === targetIdx) {
+        return;
+      }
+
+      const updated = [...queuedPhotos];
+      const [moved] = updated.splice(dragSrcIndex, 1);
+      updated.splice(targetIdx, 0, moved);
+      queuedPhotos = updated;
+
+      sendReorderToServer();
+      renderQueuedPhotos(queuedPhotos);
+    }
+
+    function handlePreviewDragEnd() {
+      this.classList.remove('dragging');
+      this.classList.remove('drag-over');
+      dragSrcIndex = null;
+    }
+
+    function renderQueuedPhotos(photos) {
+      if (!previewGridEl) return;
+
+      if (!photos || !photos.length) {
+        queuedPhotos = [];
+        previewGridEl.innerHTML = '<div class="preview-empty">No photos queued yet.</div>';
+        if (previewHelperTextEl) {
+          previewHelperTextEl.textContent = '';
+        }
+        return;
+      }
+
+      queuedPhotos = photos.slice();
+
+      previewGridEl.innerHTML = '';
+      queuedPhotos.forEach((photo, index) => {
+        const item = document.createElement('div');
+        item.className = 'preview-item';
+
+        const thumbWrap = document.createElement('div');
+        thumbWrap.className = 'preview-thumb-wrapper';
+
+        const img = document.createElement('img');
+        img.src = photo.url;
+        img.alt = photo.name || 'Queued photo';
+
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'preview-remove';
+        removeBtn.textContent = '×';
+        removeBtn.title = 'Remove photo';
+        removeBtn.addEventListener('click', (event) => {
+          event.stopPropagation();
+          if (photo.relPath) {
+            removeQueuedPhoto(photo.relPath);
+          }
+        });
+
+        thumbWrap.appendChild(img);
+        thumbWrap.appendChild(removeBtn);
+
+        const nameEl = document.createElement('div');
+        nameEl.className = 'preview-name';
+        nameEl.textContent = photo.name || '';
+
+        item.appendChild(thumbWrap);
+        item.appendChild(nameEl);
+
+        attachDragHandlers(item, index);
+
+        previewGridEl.appendChild(item);
+      });
+
+      if (previewHelperTextEl) {
+        previewHelperTextEl.textContent =
+          queuedPhotos.length + ' photo' + (queuedPhotos.length === 1 ? '' : 's');
+      }
+    }
+
+    async function loadQueuedPhotos() {
+      try {
+        const res = await fetch('/api/queued-photos');
+        if (!res.ok) {
+          return;
+        }
+        const data = await res.json();
+        const photos = data && Array.isArray(data.photos) ? data.photos : [];
+        renderQueuedPhotos(photos);
+      } catch (err) {
+        console.error('loadQueuedPhotos error', err);
+      }
+    }
+
+    async function sendReorderToServer() {
+      try {
+        const order = queuedPhotos
+          .map(p => p.relPath)
+          .filter(Boolean);
+
+        if (!order.length) return;
+
+        const res = await fetch('/api/reorder-photos', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ order })
+        });
+
+        if (!res.ok) {
+          const text = await res.text();
+          console.error('sendReorderToServer error', text);
+        }
+      } catch (err) {
+        console.error('sendReorderToServer error', err);
+      }
+    }
+
+    async function selectProduct(p) {
+      try {
+        await fetch('/api/select-product', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: p.id,
+            title: p.title,
+            sku: p.sku || null,
+            created_at: p.created_at
+          })
+        });
+        await loadCurrent();
+        await loadQueuedPhotos();
+      } catch (err) {
+        console.error('selectProduct error', err);
+        alert('Failed to select product');
+      }
+    }
+
+    async function loadCurrent() {
+      try {
+        const res = await fetch('/api/current-product');
+        if (!res.ok) return;
+        const data = await res.json();
+
+        if (!data.product) {
+          currentTitleEl.textContent = 'None selected';
+          currentMetaEl.textContent = '';
+          queueCountEl.textContent = data.queuedCount || 0;
+          return;
+        }
+
+        const skuText = data.product.sku || 'none';
+
+        currentTitleEl.textContent = data.product.title;
+        currentMetaEl.textContent =
+          `SKU: ${skuText} | ID: ${data.product.id} | Created: ${formatDate(data.product.created_at)}`;
+        queueCountEl.textContent = data.queuedCount || 0;
+      } catch (err) {
+        console.error('loadCurrent error', err);
+      }
+    }
+
+    async function removeQueuedPhoto(relPath) {
+      try {
+        const res = await fetch('/api/remove-photo', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ relPath })
+        });
+        const json = await res.json();
+        if (!res.ok) {
+          const msg = json.error || 'Failed to remove photo';
+          alert(msg);
+          return;
+        }
+        await loadQueuedPhotos();
+        await loadCurrent();
+      } catch (err) {
+        console.error('removeQueuedPhoto error', err);
+        alert('Error removing photo');
+      }
+    }
+
+    async function doneUpload() {
+      setUploadingState(true);
+      try {
+        const res = await fetch('/api/done', { method: 'POST' });
+        let json = null;
+        try {
+          json = await res.json();
+        } catch {
+          json = null;
+        }
+
+        if (!res.ok) {
+          const msg = (json && json.error) || 'Upload failed';
+          setUploadingState(false);
+          alert(msg);
+          return;
+        }
+
+        if (searchInputEl) {
+          searchInputEl.value = '';
+        }
+
+        setUploadingState(false);
+        showToast('Upload complete. Ready for the next product.');
+
+        await loadProducts();
+        await loadCurrent();
+        await loadQueuedPhotos();
+      } catch (err) {
+        console.error('doneUpload error', err);
+        setUploadingState(false);
+        alert('Error uploading images');
+      }
+    }
+
+    async function handleCloseClick() {
+      const confirmed = window.confirm('Are you sure you want to close the Street Commerce Photo Tool?');
+      if (!confirmed) return;
+
+      try {
+        await fetch('/api/shutdown', { method: 'POST' });
+      } catch (err) {
+        console.error('Error sending shutdown request', err);
+      }
+
+      // Browsers only let scripts close windows that were opened by script
+      // This may not always work if you opened the page directly
+      setTimeout(() => {
+        window.open('', '_self');
+        window.close();
+      }, 300);
+    }
+
+    function startAppOnce() {
+      if (appStarted) return;
+      appStarted = true;
+
+      loadProducts();
+      loadCurrent();
+      loadQueuedPhotos();
+
+      setInterval(() => {
+        loadCurrent();
+        loadQueuedPhotos();
+      }, 5000);
+    }
+
+    // Events
+    refreshBtn.addEventListener('click', loadProducts);
+    doneBtn.addEventListener('click', doneUpload);
+
+    if (searchInputEl) {
+      searchInputEl.addEventListener('input', updateProductListFromSearch);
+    }
+
+    if (closeBtn) {
+      closeBtn.addEventListener('click', handleCloseClick);
+    }
+
+    window.addEventListener('load', () => {
+      // Restore store selection from session if present
+      try {
+        const stored = window.sessionStorage.getItem('scPhotoToolStore');
+        if (stored) {
+          selectedStore = stored;
+          if (splashEl) {
+            splashEl.style.display = 'none';
+          }
+          startAppOnce();
+        } else if (splashEl) {
+          splashEl.style.display = 'flex';
+        }
+      } catch (e) {
+        console.error('sessionStorage read error', e);
+        if (splashEl) {
+          splashEl.style.display = 'flex';
+        }
+      }
+
+      // Attach handlers for splash store buttons and link
+      splashStoreButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+          const storeCode = btn.getAttribute('data-store') || 'ALL';
+          selectedStore = storeCode;
+
+          try {
+            window.sessionStorage.setItem('scPhotoToolStore', storeCode);
+          } catch (e) {
+            console.error('sessionStorage write error', e);
+          }
+
+          if (splashEl) {
+            splashEl.style.display = 'none';
+          }
+
+          startAppOnce();
+        });
+      });
+    });
+  </script>
+</body>
+</html>
