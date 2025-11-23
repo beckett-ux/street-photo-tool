@@ -4,6 +4,7 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs');
 const chokidar = require('chokidar');
+const sharp = require('sharp');
 
 const {
   getRecentProductsWithoutImages,
@@ -20,6 +21,9 @@ const WATCH_DIR = process.env.PHOTO_WATCH_DIR
 
 // Folder where we archive uploaded photos
 const UPLOADED_DIR = path.join(__dirname, 'Uploaded Photos');
+
+// Folder where we write cropped square versions for upload
+const CROPPED_DIR = path.join(__dirname, 'CroppedTemp');
 
 let currentProduct = null;    // { id, title, created_at }
 let queuedFiles = [];         // absolute file paths for current product
@@ -68,6 +72,57 @@ function archiveUploadedFiles(product, files) {
       console.error('Error archiving file', filePath, e);
     }
   });
+}
+
+// Crop an image to a centered square and write to CROPPED_DIR
+// Returns the path of the cropped file, or the original path if cropping fails
+async function cropImageToSquare(filePath) {
+  try {
+    await fs.promises.mkdir(CROPPED_DIR, { recursive: true });
+
+    const image = sharp(filePath);
+    const metadata = await image.metadata();
+    const width = metadata.width;
+    const height = metadata.height;
+
+    if (!width || !height) {
+      console.warn('Cannot read image dimensions, skipping crop for', filePath);
+      return filePath;
+    }
+
+    if (width === height) {
+      // Already square
+      console.log('Already square, skipping crop for', filePath);
+      // Still copy to CROPPED_DIR so upload uses files from one place
+      const base = path.basename(filePath);
+      const outPathSame = path.join(CROPPED_DIR, base);
+      await sharp(filePath).toFile(outPathSame);
+      return outPathSame;
+    }
+
+    const size = Math.min(width, height);
+    const left = Math.floor((width - size) / 2);
+    const top = Math.floor((height - size) / 2);
+
+    const base = path.basename(filePath);
+    const ext = path.extname(base);
+    const nameWithout = path.basename(base, ext);
+    const outPath = path.join(
+      CROPPED_DIR,
+      `${nameWithout}-square${ext || '.jpg'}`
+    );
+
+    await sharp(filePath)
+      .extract({ left, top, width: size, height: size })
+      .toFile(outPath);
+
+    console.log('Cropped image saved to', outPath);
+    return outPath;
+  } catch (err) {
+    console.error('Error cropping image to square for', filePath, err);
+    // Fall back to original if cropping fails
+    return filePath;
+  }
 }
 
 // Express setup
@@ -211,7 +266,7 @@ app.post('/api/reorder-photos', (req, res) => {
   res.json({ ok: true });
 });
 
-// When user clicks Done, upload all queued images and publish
+// When user clicks Done, crop all queued images to squares and upload
 app.post('/api/done', async (req, res) => {
   if (!currentProduct) {
     return res.status(400).json({ error: 'No product selected' });
@@ -224,10 +279,15 @@ app.post('/api/done', async (req, res) => {
   const filesToArchive = [...queuedFiles];
 
   try {
-    console.log(`Uploading ${queuedFiles.length} images for product ${productId}`);
-    await uploadImagesToProduct(productId, queuedFiles);
+    console.log(`Cropping ${queuedFiles.length} images to square for product ${productId}`);
+    const croppedPaths = await Promise.all(
+      queuedFiles.map(filePath => cropImageToSquare(filePath))
+    );
 
-    // Move files into Uploaded Photos\<product title>\
+    console.log(`Uploading ${croppedPaths.length} cropped images for product ${productId}`);
+    await uploadImagesToProduct(productId, croppedPaths);
+
+    // Move original files into Uploaded Photos\<product title>\
     archiveUploadedFiles(currentProduct, filesToArchive);
 
     // Reset state for next product
