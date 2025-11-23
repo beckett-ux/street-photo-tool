@@ -129,12 +129,43 @@ async function cropImageToSquare(filePath) {
 app.use(express.json());
 app.use(express.static(__dirname));
 
-// API route, recent products with no photos (up to 100)
+// API route, recent products with no photos (up to 100 per store)
 app.get('/api/products-without-photos', async (req, res) => {
-  console.log('GET /api/products-without-photos');
+  const storeRaw = req.query.store || 'ALL';
+  const store = String(storeRaw).toUpperCase(); // DMV, CLT, or ALL
+
+  console.log('GET /api/products-without-photos store =', store);
+
   try {
-    const products = await getRecentProductsWithoutImages(100);
-    res.json(products);
+    // Grab a larger batch so filtering by store still leaves up to 100
+    const products = await getRecentProductsWithoutImages(300);
+
+    let filtered = products || [];
+
+    if (store === 'DMV' || store === 'CLT') {
+      filtered = filtered.filter(p => {
+        if (!p.tags) return false;
+
+        let tagsList;
+        if (Array.isArray(p.tags)) {
+          tagsList = p.tags.map(t => String(t).trim().toUpperCase());
+        } else {
+          tagsList = String(p.tags)
+            .split(',')
+            .map(t => t.trim().toUpperCase())
+            .filter(Boolean);
+        }
+
+        return tagsList.includes(store);
+      });
+    }
+
+    // Keep only the most recent 100 entries for that store
+    if (filtered.length > 100) {
+      filtered = filtered.slice(0, 100);
+    }
+
+    res.json(filtered);
   } catch (err) {
     console.error('Error in /api/products-without-photos', err);
     res.status(500).json({ error: 'Failed to load products' });
