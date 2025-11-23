@@ -14,12 +14,15 @@ const app = express();
 const PORT = 3000;
 
 // Folder where the camera drops files
-const WATCH_DIR = path.join(__dirname, 'Watch');
+const WATCH_DIR = process.env.PHOTO_WATCH_DIR
+  ? path.resolve(process.env.PHOTO_WATCH_DIR)
+  : path.join(__dirname, 'Watch');
+
 // Folder where we archive uploaded photos
 const UPLOADED_DIR = path.join(__dirname, 'Uploaded Photos');
 
 let currentProduct = null;    // { id, title, created_at }
-let queuedFiles = [];         // local file paths for current product
+let queuedFiles = [];         // absolute file paths for current product
 
 // Helper to sanitize product title for Windows folder name
 function sanitizeFolderName(name) {
@@ -35,7 +38,7 @@ function sanitizeFolderName(name) {
   return cleaned;
 }
 
-// Archive uploaded files into Uploaded Photos\<product title>\
+// Archive uploaded files into "Uploaded Photos\<product title>\"
 function archiveUploadedFiles(product, files) {
   if (!product || !files || files.length === 0) return;
 
@@ -67,16 +70,11 @@ function archiveUploadedFiles(product, files) {
   });
 }
 
-// Middleware
+// Express setup
 app.use(express.json());
-
-// Serve static files from project root
 app.use(express.static(__dirname));
 
-// Serve the Watch folder as /watch so the browser can render previews
-app.use('/watch', express.static(WATCH_DIR));
-
-// API route, last 100 recently created products with no photos
+// API route, recent products with no photos (up to 100)
 app.get('/api/products-without-photos', async (req, res) => {
   console.log('GET /api/products-without-photos');
   try {
@@ -109,65 +107,107 @@ app.get('/api/current-product', (req, res) => {
   });
 });
 
-// Return queued photos with local URLs for preview
-app.get('/api/queued-photos', (req, res) => {
-  const photos = queuedFiles.map(filePath => {
-    // Compute path relative to WATCH_DIR
-    const relPath = path.relative(WATCH_DIR, filePath);
-    // Normalize to URL style slashes
-    const relWebPath = relPath.split(path.sep).join('/');
-    const url = '/watch/' + relWebPath;
+// Serve preview of a queued image (by relative path under WATCH_DIR)
+app.get('/photo-preview', (req, res) => {
+  const rel = req.query.file;
+  if (!rel) {
+    return res.status(400).send('Missing file parameter');
+  }
 
-    return {
-      url,
-      name: path.basename(filePath),
-      relPath: relWebPath
-    };
-  });
+  const absPath = path.resolve(WATCH_DIR, rel);
 
-  res.json({ photos });
+  // Basic safety check, prevent path escape
+  if (!absPath.startsWith(path.normalize(WATCH_DIR))) {
+    return res.status(400).send('Invalid path');
+  }
+
+  if (!fs.existsSync(absPath)) {
+    return res.status(404).send('File not found');
+  }
+
+  res.sendFile(absPath);
 });
 
-// Remove a single queued photo (and delete the file on disk)
+// Get queued photos for preview
+app.get('/api/queued-photos', (req, res) => {
+  try {
+    const photos = queuedFiles.map(filePath => {
+      const relPath = path.relative(WATCH_DIR, filePath).replace(/\\/g, '/');
+      return {
+        name: path.basename(filePath),
+        relPath,
+        url: `/photo-preview?file=${encodeURIComponent(relPath)}`
+      };
+    });
+
+    res.json({ photos });
+  } catch (err) {
+    console.error('Error in /api/queued-photos', err);
+    res.status(500).json({ error: 'Failed to read queued photos' });
+  }
+});
+
+// Remove a queued photo (and delete the file from disk)
 app.post('/api/remove-photo', (req, res) => {
   const { relPath } = req.body || {};
   if (!relPath) {
     return res.status(400).json({ error: 'Missing relPath' });
   }
 
-  const absPath = path.join(WATCH_DIR, relPath);
-  const normalizedAbs = path.normalize(absPath);
+  const absPath = path.resolve(WATCH_DIR, relPath);
 
-  const index = queuedFiles.findIndex(p => path.normalize(p) === normalizedAbs);
+  // Filter out from queue
+  const before = queuedFiles.length;
+  queuedFiles = queuedFiles.filter(p => path.normalize(p) !== path.normalize(absPath));
 
-  if (index === -1) {
-    console.warn('Requested to remove photo not in queue:', relPath);
-    // Optionally also delete file if it exists
-    try {
-      if (fs.existsSync(normalizedAbs)) {
-        fs.unlinkSync(normalizedAbs);
-        console.log('Deleted file on disk that was not in queue:', normalizedAbs);
-      }
-    } catch (e) {
-      console.error('Error deleting file that was not in queue:', normalizedAbs, e);
-    }
-    return res.status(404).json({ error: 'Photo not found in queue' });
-  }
-
-  const [removedPath] = queuedFiles.splice(index, 1);
-
+  // Best effort delete from disk
   try {
-    if (fs.existsSync(removedPath)) {
-      fs.unlinkSync(removedPath);
-      console.log('Removed queued photo and deleted file:', removedPath);
-    } else {
-      console.log('Removed queued photo (file already gone):', removedPath);
+    if (fs.existsSync(absPath)) {
+      fs.unlinkSync(absPath);
+      console.log('Removed queued photo file', absPath);
     }
-  } catch (e) {
-    console.error('Error deleting queued photo file', removedPath, e);
-    return res.status(500).json({ error: 'Failed to delete photo file' });
+  } catch (err) {
+    console.error('Error deleting file', absPath, err);
   }
 
+  console.log('Removed photo from queue, count before/after:', before, queuedFiles.length);
+  res.json({ ok: true, queuedCount: queuedFiles.length });
+});
+
+// Reorder queued photos based on an array of relPath values
+app.post('/api/reorder-photos', (req, res) => {
+  const { order } = req.body || {};
+  if (!Array.isArray(order)) {
+    return res.status(400).json({ error: 'Missing order array' });
+  }
+
+  const normalize = p => path.normalize(p);
+
+  const relToAbs = rel => path.resolve(WATCH_DIR, rel);
+
+  const newQueued = [];
+  order.forEach(rel => {
+    const abs = relToAbs(rel);
+    const found = queuedFiles.find(p => normalize(p) === normalize(abs));
+    if (found) {
+      newQueued.push(found);
+    }
+  });
+
+  if (!newQueued.length) {
+    console.warn('Reorder request did not match any queued files');
+    return res.status(400).json({ error: 'Reorder did not match current queue' });
+  }
+
+  if (newQueued.length !== queuedFiles.length) {
+    console.warn('Reorder did not include all queued files, appending leftovers at end');
+    const leftovers = queuedFiles.filter(p => !newQueued.includes(p));
+    queuedFiles = newQueued.concat(leftovers);
+  } else {
+    queuedFiles = newQueued;
+  }
+
+  console.log('Reordered queued files, new order length:', queuedFiles.length);
   res.json({ ok: true });
 });
 
