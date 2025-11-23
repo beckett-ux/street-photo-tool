@@ -8,6 +8,16 @@ const shopDomain = process.env.SHOPIFY_SHOP_DOMAIN; // e.g. yourstore.myshopify.
 const apiVersion = process.env.SHOPIFY_API_VERSION || '2024-07';
 const adminToken = process.env.SHOPIFY_ADMIN_TOKEN;
 
+// Sales channels we want every product published to
+const REQUIRED_PUBLICATION_NAMES = [
+  'Online Store',
+  'Point of Sale',
+  'Google & YouTube',
+  'Facebook & Instagram'
+];
+
+let cachedPublicationIds = null;
+
 // ---------- REST helper for non paginated calls (images, updates) ----------
 async function shopifyRest(pathPart, options = {}) {
   const url = `https://${shopDomain}/admin/api/${apiVersion}${pathPart}`;
@@ -37,6 +47,188 @@ async function shopifyRest(pathPart, options = {}) {
   }
 
   return json;
+}
+
+// ---------- GraphQL helper ----------
+
+async function shopifyGraphql(query, variables = {}) {
+  const url = `https://${shopDomain}/admin/api/${apiVersion}/graphql.json`;
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'X-Shopify-Access-Token': adminToken,
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'
+    },
+    body: JSON.stringify({ query, variables })
+  });
+
+  const text = await res.text();
+  let json;
+  try {
+    json = text ? JSON.parse(text) : {};
+  } catch (e) {
+    console.error('Shopify GraphQL non JSON response:', text);
+    throw new Error(`Shopify GraphQL returned non JSON, status ${res.status}`);
+  }
+
+  if (!res.ok) {
+    console.error('Shopify GraphQL HTTP error', res.status, json);
+    throw new Error(`Shopify GraphQL HTTP error ${res.status}`);
+  }
+
+  if (json.errors && json.errors.length) {
+    console.error('Shopify GraphQL errors', JSON.stringify(json.errors, null, 2));
+    throw new Error('Shopify GraphQL returned errors');
+  }
+
+  return json.data;
+}
+
+// Fetch and cache publication ids for the required sales channels
+async function getRequiredPublicationIds() {
+  if (cachedPublicationIds && cachedPublicationIds.length) {
+    return cachedPublicationIds;
+  }
+
+  const query = `
+    query ListPublications {
+      publications(first: 50) {
+        edges {
+          node {
+            id
+            name
+            catalog {
+              title
+            }
+          }
+        }
+      }
+    }
+  `;
+
+  let data;
+  try {
+    data = await shopifyGraphql(query);
+  } catch (err) {
+    console.error('Failed to load publications via GraphQL', err);
+    return [];
+  }
+
+  const edges = data &&
+    data.publications &&
+    Array.isArray(data.publications.edges)
+    ? data.publications.edges
+    : [];
+
+  console.log(
+    'All publications from GraphQL:',
+    edges.map(e => ({
+      id: e.node.id,
+      name: e.node.name,
+      catalogTitle: e.node.catalog && e.node.catalog.title
+    }))
+  );
+
+  const publicationIds = [];
+  const missing = [];
+
+  REQUIRED_PUBLICATION_NAMES.forEach(required => {
+    const requiredLower = required.toLowerCase();
+
+    const match = edges.find(edge => {
+      if (!edge || !edge.node) return false;
+      const node = edge.node;
+      const labelParts = [];
+
+      if (node.name) {
+        labelParts.push(String(node.name));
+      }
+      if (node.catalog && node.catalog.title) {
+        labelParts.push(String(node.catalog.title));
+      }
+
+      const label = labelParts.join(' ').toLowerCase();
+      return label.includes(requiredLower);
+    });
+
+    if (match) {
+      publicationIds.push(match.node.id);
+    } else {
+      missing.push(required);
+    }
+  });
+
+  if (missing.length) {
+    console.warn(
+      'Could not find publication ids for channels:',
+      missing.join(', ')
+    );
+  }
+
+  if (!publicationIds.length) {
+    console.warn('No publication ids found. Products will not be published to channels.');
+  }
+
+  cachedPublicationIds = publicationIds;
+  return publicationIds;
+}
+
+// Publish a product to the default sales channels using GraphQL
+async function publishProductToDefaultSalesChannels(productId) {
+  const publicationIds = await getRequiredPublicationIds();
+  if (!publicationIds.length) {
+    return;
+  }
+
+  const productGid = `gid://shopify/Product/${productId}`;
+
+  const mutation = `
+    mutation PublishProduct($id: ID!, $input: [PublicationInput!]!) {
+      publishablePublish(id: $id, input: $input) {
+        publishable {
+          ... on Product {
+            id
+          }
+        }
+        userErrors {
+          field
+          message
+        }
+      }
+    }
+  `;
+
+  const input = publicationIds.map(publicationId => ({ publicationId }));
+
+  let data;
+  try {
+    data = await shopifyGraphql(mutation, { id: productGid, input });
+  } catch (err) {
+    console.error(
+      'GraphQL error while publishing product to sales channels',
+      err
+    );
+    return;
+  }
+
+  const payload = data && data.publishablePublish;
+  const userErrors = payload && Array.isArray(payload.userErrors)
+    ? payload.userErrors
+    : [];
+
+  if (userErrors.length) {
+    console.error(
+      'publishablePublish returned userErrors:',
+      JSON.stringify(userErrors, null, 2)
+    );
+    return;
+  }
+
+  console.log(
+    `Published product ${productId} to ${publicationIds.length} sales channels`
+  );
 }
 
 // ---------- pagination helper for products ----------
@@ -154,7 +346,7 @@ async function getRecentProductsWithoutImages(limit = 30) {
   return top;
 }
 
-// ---------- upload images + mark active ----------
+// ---------- upload images + mark active + publish to sales channels ----------
 
 async function uploadImagesToProduct(productId, localFilePaths) {
   const allowedExts = ['.jpg', '.jpeg', '.png', '.heic'];
@@ -186,7 +378,12 @@ async function uploadImagesToProduct(productId, localFilePaths) {
     );
 
     const uploaded = json.image;
-    console.log('Uploaded image for product', productId, 'image id:', uploaded && uploaded.id);
+    console.log(
+      'Uploaded image for product',
+      productId,
+      'image id:',
+      uploaded && uploaded.id
+    );
   }
 
   // Try to set status to active, ignore if it fails
@@ -203,6 +400,16 @@ async function uploadImagesToProduct(productId, localFilePaths) {
     console.log('Updated product status to active for', productId);
   } catch (err) {
     console.warn('Could not update product status for', productId, err.message);
+  }
+
+  // After making sure the product is active, publish to the required sales channels.
+  try {
+    await publishProductToDefaultSalesChannels(productId);
+  } catch (err) {
+    console.error(
+      'Failed to publish product to default sales channels',
+      err
+    );
   }
 }
 
