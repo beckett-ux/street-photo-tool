@@ -250,13 +250,20 @@
       box-shadow: 0 3px 8px rgba(15, 23, 42, 0.08);
       box-sizing: border-box;
       cursor: grab;
+      transition: box-shadow 0.12s ease, transform 0.12s ease, border-color 0.12s ease;
     }
 
     .preview-item.dragging {
-      opacity: 0.85;
-      outline: 2px dashed #0f766e;
-      outline-offset: -2px;
+      opacity: 0.9;
+      border-color: #0f766e;
+      box-shadow: 0 6px 14px rgba(15, 23, 42, 0.24);
+      transform: scale(1.02);
       cursor: grabbing;
+    }
+
+    .preview-item.drag-over {
+      border-color: #0f766e;
+      box-shadow: 0 0 0 2px #0f766e55;
     }
 
     .preview-thumb-wrapper {
@@ -275,7 +282,7 @@
       max-height: 100%;
       width: auto;
       height: auto;
-      object-fit: contain; /* no cropping, full image in box */
+      object-fit: contain;
       display: block;
     }
 
@@ -333,24 +340,27 @@
     /* Toast notification */
     .toast {
       position: fixed;
-      bottom: 16px;
-      right: 16px;
+      bottom: 32px;
+      left: 50%;
+      transform: translate(-50%, 12px);
       background: #16a34a;
       color: #fff;
-      padding: 10px 14px;
-      border-radius: 8px;
-      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
-      font-size: 14px;
+      padding: 14px 20px;
+      border-radius: 999px;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
+      font-size: 15px;
+      font-weight: 600;
       opacity: 0;
-      transform: translateY(8px);
       pointer-events: none;
       transition: opacity 0.2s ease, transform 0.2s ease;
       z-index: 1000;
+      text-align: center;
+      min-width: 260px;
     }
 
     .toast.show {
       opacity: 1;
-      transform: translateY(0);
+      transform: translate(-50%, 0);
     }
   </style>
 </head>
@@ -422,9 +432,46 @@
     const currentMetaEl = document.querySelector('#current-block .current-meta');
     const queueCountEl = document.getElementById('queue-count');
 
-    // For drag and drop ordering
+    // Drag and drop ordering
     let queuedPhotos = [];
     let dragSrcIndex = null;
+
+    // Upload button animation
+    const doneBtnDefaultText = doneBtn ? doneBtn.textContent : 'Done - upload photos and publish';
+    let uploading = false;
+    let uploadDotsInterval = null;
+
+    function setUploadingState(isUploading) {
+      if (!doneBtn) return;
+
+      if (isUploading) {
+        uploading = true;
+        doneBtn.disabled = true;
+
+        const base = 'Uploading';
+        let dots = 1;
+        doneBtn.textContent = base + '.';
+
+        if (uploadDotsInterval) {
+          clearInterval(uploadDotsInterval);
+        }
+
+        uploadDotsInterval = setInterval(() => {
+          dots = dots + 1;
+          if (dots > 3) dots = 1;
+          doneBtn.textContent = base + '.'.repeat(dots);
+        }, 400);
+      } else {
+        uploading = false;
+        doneBtn.disabled = false;
+
+        if (uploadDotsInterval) {
+          clearInterval(uploadDotsInterval);
+          uploadDotsInterval = null;
+        }
+        doneBtn.textContent = doneBtnDefaultText;
+      }
+    }
 
     function formatDate(iso) {
       if (!iso) return '';
@@ -536,6 +583,8 @@
       item.addEventListener('dragover', handlePreviewDragOver);
       item.addEventListener('drop', handlePreviewDrop);
       item.addEventListener('dragend', handlePreviewDragEnd);
+      item.addEventListener('dragenter', handlePreviewDragEnter);
+      item.addEventListener('dragleave', handlePreviewDragLeave);
     }
 
     function handlePreviewDragStart(e) {
@@ -555,8 +604,18 @@
       }
     }
 
+    function handlePreviewDragEnter(e) {
+      e.preventDefault();
+      this.classList.add('drag-over');
+    }
+
+    function handlePreviewDragLeave(e) {
+      this.classList.remove('drag-over');
+    }
+
     function handlePreviewDrop(e) {
       e.preventDefault();
+      this.classList.remove('drag-over');
       const targetIdx = Number(this.dataset.index);
       if (dragSrcIndex === null || isNaN(targetIdx) || dragSrcIndex === targetIdx) {
         return;
@@ -573,6 +632,7 @@
 
     function handlePreviewDragEnd() {
       this.classList.remove('dragging');
+      this.classList.remove('drag-over');
       dragSrcIndex = null;
     }
 
@@ -629,7 +689,8 @@
       });
 
       if (previewHelperTextEl) {
-        previewHelperTextEl.textContent = queuedPhotos.length + ' photo' + (queuedPhotos.length === 1 ? '' : 's');
+        previewHelperTextEl.textContent =
+          queuedPhotos.length + ' photo' + (queuedPhotos.length === 1 ? '' : 's');
       }
     }
 
@@ -733,11 +794,19 @@
     }
 
     async function doneUpload() {
+      setUploadingState(true);
       try {
         const res = await fetch('/api/done', { method: 'POST' });
-        const json = await res.json();
+        let json = null;
+        try {
+          json = await res.json();
+        } catch {
+          json = null;
+        }
+
         if (!res.ok) {
-          const msg = json.error || 'Upload failed';
+          const msg = (json && json.error) || 'Upload failed';
+          setUploadingState(false);
           alert(msg);
           return;
         }
@@ -746,13 +815,15 @@
           searchInputEl.value = '';
         }
 
-        showToast('Photos uploaded and product published. Ready for the next product.');
+        setUploadingState(false);
+        showToast('Upload complete. Ready for the next product.');
 
         await loadProducts();
         await loadCurrent();
         await loadQueuedPhotos();
       } catch (err) {
         console.error('doneUpload error', err);
+        setUploadingState(false);
         alert('Error uploading images');
       }
     }
