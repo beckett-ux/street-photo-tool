@@ -1,17 +1,6 @@
-# Node deps
 node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# Secrets
 .env
-
-# Local photo folders
-Watch/
 Uploaded Photos/
-
-# OS junk
-.DS_Store
-Thumbs.db
-desktop.ini
+Watch/
+npm-debug.log*
+*.log
