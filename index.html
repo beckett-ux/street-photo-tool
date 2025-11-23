@@ -4,165 +4,261 @@
   <meta charset="UTF-8">
   <title>Street Commerce Photo Tool</title>
   <style>
+    :root {
+      color-scheme: light;
+    }
+
     body {
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       margin: 0;
       padding: 24px;
-      background: #fff;
-    }
-    h1 {
-      font-size: 32px;
-      margin-bottom: 4px;
-    }
-    .subtitle {
-      margin-bottom: 24px;
-      color: #444;
-    }
-    .layout {
-      display: flex;
-      gap: 24px;
-      align-items: flex-start;
-    }
-    .column {
-      flex: 1;
-      min-width: 320px;
-    }
-    .panel {
-      background: #f8f8f8;
-      border-radius: 8px;
-      padding: 16px;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
-    }
-    h2 {
-      margin-top: 0;
-      font-size: 20px;
-      margin-bottom: 12px;
+      background: #0f172a;
+      color: #0f172a;
     }
 
-    /* Search bar */
-    .search-row {
-      margin-top: 8px;
-      margin-bottom: 8px;
+    .page {
+      max-width: 1240px;
+      margin: 0 auto;
     }
-    #search-input {
-      width: 100%;
-      padding: 6px 8px;
+
+    h1 {
+      font-size: 28px;
+      margin: 0 0 4px 0;
+      color: #f9fafb;
+    }
+
+    .subtitle {
+      margin-bottom: 20px;
+      color: #9ca3af;
       font-size: 14px;
-      border: 1px solid #ccc;
-      border-radius: 4px;
+    }
+
+    .layout {
+      display: flex;
+      gap: 20px;
+      align-items: stretch;
+    }
+
+    .column {
+      min-width: 320px;
+    }
+
+    .column-left {
+      flex: 0.55;
+    }
+
+    .column-right {
+      flex: 0.45;
+    }
+
+    .panel {
+      background: #f9fafb;
+      border-radius: 12px;
+      padding: 16px 18px;
+      box-shadow: 0 10px 25px rgba(15, 23, 42, 0.16);
+      border: 1px solid #e5e7eb;
       box-sizing: border-box;
     }
 
+    h2 {
+      margin-top: 0;
+      font-size: 18px;
+      margin-bottom: 10px;
+      color: #111827;
+    }
+
+    /* Search row */
+    .search-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    #search-input {
+      width: 100%;
+      padding: 8px 10px;
+      font-size: 14px;
+      border: 1px solid #d1d5db;
+      border-radius: 999px;
+      box-sizing: border-box;
+      outline: none;
+      background: #f3f4f6;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+    }
+
+    #search-input:focus {
+      border-color: #0f766e;
+      box-shadow: 0 0 0 1px #0f766e33;
+      background: #ffffff;
+    }
+
     #refresh-btn {
-      margin-bottom: 12px;
+      flex-shrink: 0;
     }
 
     #product-list {
       display: flex;
       flex-direction: column;
       gap: 8px;
+      max-height: 520px;
+      overflow-y: auto;
+      padding-right: 4px;
     }
+
     .product-row {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      gap: 12px;
+      gap: 10px;
       padding: 10px 12px;
-      border-radius: 6px;
-      border: 1px solid #ddd;
-      background: #fff;
+      border-radius: 8px;
+      border: 1px solid #e5e7eb;
+      background: #ffffff;
+      box-sizing: border-box;
+      transition: border-color 0.12s ease, box-shadow 0.12s ease, transform 0.08s ease;
     }
+
+    .product-row:hover {
+      border-color: #0f766e;
+      box-shadow: 0 4px 10px rgba(15, 23, 42, 0.08);
+      transform: translateY(-1px);
+    }
+
     .product-main {
       flex: 1;
       min-width: 0;
     }
+
     .product-title {
       font-weight: 600;
-      margin-bottom: 4px;
+      margin-bottom: 2px;
       word-break: break-word;
+      font-size: 14px;
+      color: #111827;
     }
+
     .product-meta {
-      font-size: 12px;
-      color: #666;
+      font-size: 11px;
+      color: #6b7280;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
+
     .product-empty {
       padding: 12px;
-      color: #666;
-      font-size: 14px;
+      color: #6b7280;
+      font-size: 13px;
     }
 
     button {
       cursor: pointer;
       border: none;
-      border-radius: 4px;
-      padding: 8px 12px;
-      font-size: 14px;
+      border-radius: 999px;
+      padding: 7px 14px;
+      font-size: 13px;
+      font-weight: 500;
       background: #111827;
       color: #fff;
+      transition: background 0.12s ease, transform 0.06s ease, box-shadow 0.12s ease;
+      white-space: nowrap;
     }
+
+    button:hover:not(:disabled) {
+      background: #020617;
+      box-shadow: 0 4px 10px rgba(15, 23, 42, 0.25);
+      transform: translateY(-0.5px);
+    }
+
+    button:active:not(:disabled) {
+      transform: translateY(0);
+      box-shadow: 0 1px 4px rgba(15, 23, 42, 0.25);
+    }
+
     button:disabled {
       opacity: 0.6;
       cursor: default;
+      box-shadow: none;
+      transform: none;
     }
 
     /* Right side current product panel */
     #current-block {
-      margin-bottom: 12px;
+      margin-bottom: 10px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #e5e7eb;
     }
+
     .current-title {
       font-weight: 600;
       margin-bottom: 4px;
+      font-size: 16px;
+      color: #111827;
     }
+
     .current-meta {
-      font-size: 13px;
-      color: #555;
-      margin-bottom: 16px;
+      font-size: 12px;
+      color: #6b7280;
+      margin-bottom: 10px;
     }
+
     .queue-text {
-      margin-bottom: 12px;
-      font-size: 13px;
+      margin-bottom: 4px;
+      font-size: 12px;
+      color: #4b5563;
     }
 
     /* Queued photo previews */
     .previews-block {
       margin-bottom: 16px;
     }
+
     .previews-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      font-size: 13px;
-      color: #555;
-      margin-bottom: 6px;
+      font-size: 12px;
+      color: #6b7280;
+      margin-bottom: 8px;
     }
+
     .previews-header span.label {
       font-weight: 600;
-      color: #222;
+      color: #111827;
+      font-size: 13px;
     }
+
     .preview-grid {
       display: flex;
       flex-wrap: wrap;
-      gap: 8px;
-      max-height: 260px;
+      gap: 10px;
+      max-height: 400px;
       overflow-y: auto;
+      padding-right: 4px;
     }
+
     .preview-item {
       position: relative;
-      width: 90px;
-      border-radius: 6px;
-      border: 1px solid #ddd;
-      background: #fff;
+      width: 180px;
+      border-radius: 10px;
+      border: 1px solid #e5e7eb;
+      background: #ffffff;
       overflow: hidden;
       display: flex;
       flex-direction: column;
       align-items: stretch;
+      box-shadow: 0 3px 8px rgba(15, 23, 42, 0.08);
+      box-sizing: border-box;
     }
+
     .preview-thumb-wrapper {
       position: relative;
       width: 100%;
-      padding-top: 100%; /* square */
+      padding-top: 70%;
       overflow: hidden;
+      background: #f3f4f6;
     }
+
     .preview-thumb-wrapper img {
       position: absolute;
       top: 0;
@@ -171,33 +267,56 @@
       height: 100%;
       object-fit: cover;
     }
+
     .preview-name {
       font-size: 11px;
-      padding: 2px 4px 4px 4px;
+      padding: 4px 8px 6px 8px;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+      color: #4b5563;
+      background: #f9fafb;
     }
+
     .preview-remove {
       position: absolute;
-      top: 4px;
-      right: 4px;
-      width: 18px;
-      height: 18px;
+      top: 6px;
+      right: 6px;
+      width: 22px;
+      height: 22px;
       border-radius: 999px;
       border: none;
-      background: rgba(0, 0, 0, 0.7);
+      background: rgba(15, 23, 42, 0.85);
       color: #fff;
-      font-size: 12px;
+      font-size: 13px;
       display: flex;
       align-items: center;
       justify-content: center;
       cursor: pointer;
       padding: 0;
+      box-shadow: 0 1px 4px rgba(15, 23, 42, 0.4);
     }
+
+    .preview-remove:hover {
+      background: rgba(15, 23, 42, 1);
+    }
+
     .preview-empty {
       font-size: 12px;
-      color: #777;
+      color: #6b7280;
+    }
+
+    /* Done button area */
+    #done-btn {
+      width: 100%;
+      margin-top: 6px;
+      padding: 10px 14px;
+      font-size: 14px;
+      background: #0f766e;
+    }
+
+    #done-btn:hover:not(:disabled) {
+      background: #115e59;
     }
 
     /* Toast notification */
@@ -208,8 +327,8 @@
       background: #16a34a;
       color: #fff;
       padding: 10px 14px;
-      border-radius: 6px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+      border-radius: 8px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
       font-size: 14px;
       opacity: 0;
       transform: translateY(8px);
@@ -217,6 +336,7 @@
       transition: opacity 0.2s ease, transform 0.2s ease;
       z-index: 1000;
     }
+
     .toast.show {
       opacity: 1;
       transform: translateY(0);
@@ -224,50 +344,53 @@
   </style>
 </head>
 <body>
-  <h1>Street Commerce Photo Tool</h1>
-  <div class="subtitle">
-    This laptop should stay tethered to the camera saving files into the <strong>Watch</strong> folder.
-  </div>
-
-  <!-- Toast notification -->
-  <div id="toast" class="toast"></div>
-
-  <div class="layout">
-    <!-- LEFT: products list -->
-    <div class="column">
-      <h2>Recent products without photos</h2>
-      <div class="search-row">
-        <input id="search-input" type="text" placeholder="Search products..." />
-      </div>
-      <button id="refresh-btn">Refresh list</button>
-
-      <div id="product-list"></div>
+  <div class="page">
+    <h1>Street Commerce Photo Tool</h1>
+    <div class="subtitle">
+      This laptop should stay tethered to the camera saving files into the <strong>Watch</strong> folder.
     </div>
 
-    <!-- RIGHT: current product -->
-    <div class="column">
-      <div class="panel">
-        <h2>Current product</h2>
-        <div id="current-block">
-          <div class="current-title">None selected</div>
-          <div class="current-meta"></div>
-          <div class="queue-text">
-            Queued photos this session: <span id="queue-count">0</span>
-          </div>
-        </div>
+    <!-- Toast notification -->
+    <div id="toast" class="toast"></div>
 
-        <!-- Queued photo previews -->
-        <div class="previews-block">
-          <div class="previews-header">
-            <span class="label">Queued photos</span>
-            <span id="preview-helper-text"></span>
+    <div class="layout">
+      <!-- LEFT: products list -->
+      <div class="column column-left">
+        <div class="panel">
+          <h2>Recent products without photos</h2>
+          <div class="search-row">
+            <input id="search-input" type="text" placeholder="Search by title or id" />
+            <button id="refresh-btn">Refresh</button>
           </div>
-          <div id="preview-grid" class="preview-grid">
-            <div class="preview-empty">No photos queued yet.</div>
-          </div>
+          <div id="product-list"></div>
         </div>
+      </div>
 
-        <button id="done-btn">Done - upload photos and publish</button>
+      <!-- RIGHT: current product and previews -->
+      <div class="column column-right">
+        <div class="panel">
+          <h2>Current product</h2>
+          <div id="current-block">
+            <div class="current-title">None selected</div>
+            <div class="current-meta"></div>
+            <div class="queue-text">
+              Queued photos this session: <span id="queue-count">0</span>
+            </div>
+          </div>
+
+          <!-- Queued photo previews -->
+          <div class="previews-block">
+            <div class="previews-header">
+              <span class="label">Queued photos</span>
+              <span id="preview-helper-text"></span>
+            </div>
+            <div id="preview-grid" class="preview-grid">
+              <div class="preview-empty">No photos queued yet.</div>
+            </div>
+          </div>
+
+          <button id="done-btn">Done - upload photos and publish</button>
+        </div>
       </div>
     </div>
   </div>
@@ -527,12 +650,10 @@
           return;
         }
 
-        // Clear the search field so the full list shows again
         if (searchInputEl) {
           searchInputEl.value = '';
         }
 
-        // Show green success popup
         showToast('Photos uploaded and product published. Ready for the next product.');
 
         await loadProducts();
@@ -551,7 +672,6 @@
       searchInputEl.addEventListener('input', updateProductListFromSearch);
     }
 
-    // initial load plus poll current queue and previews every few seconds
     window.addEventListener('load', () => {
       loadProducts();
       loadCurrent();
