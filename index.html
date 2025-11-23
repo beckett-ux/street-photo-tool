@@ -772,10 +772,12 @@
           return;
         }
 
-        const skuText = data.product.sku || 'none';
         currentTitleEl.textContent = data.product.title;
+
+        const skuText = data.product.sku ? data.product.sku : 'none';
         currentMetaEl.textContent =
           `SKU: ${skuText} | ID: ${data.product.id} | Created: ${formatDate(data.product.created_at)}`;
+
         queueCountEl.textContent = data.queuedCount || 0;
       } catch (err) {
         console.error('loadCurrent error', err);
