@@ -119,8 +119,85 @@
       margin-bottom: 16px;
     }
     .queue-text {
-      margin-bottom: 16px;
+      margin-bottom: 12px;
       font-size: 13px;
+    }
+
+    /* Queued photo previews */
+    .previews-block {
+      margin-bottom: 16px;
+    }
+    .previews-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+      color: #555;
+      margin-bottom: 6px;
+    }
+    .previews-header span.label {
+      font-weight: 600;
+      color: #222;
+    }
+    .preview-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      max-height: 260px;
+      overflow-y: auto;
+    }
+    .preview-item {
+      position: relative;
+      width: 90px;
+      border-radius: 6px;
+      border: 1px solid #ddd;
+      background: #fff;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+    }
+    .preview-thumb-wrapper {
+      position: relative;
+      width: 100%;
+      padding-top: 100%; /* square */
+      overflow: hidden;
+    }
+    .preview-thumb-wrapper img {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .preview-name {
+      font-size: 11px;
+      padding: 2px 4px 4px 4px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .preview-remove {
+      position: absolute;
+      top: 4px;
+      right: 4px;
+      width: 18px;
+      height: 18px;
+      border-radius: 999px;
+      border: none;
+      background: rgba(0, 0, 0, 0.7);
+      color: #fff;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      padding: 0;
+    }
+    .preview-empty {
+      font-size: 12px;
+      color: #777;
     }
 
     /* Toast notification */
@@ -178,6 +255,18 @@
             Queued photos this session: <span id="queue-count">0</span>
           </div>
         </div>
+
+        <!-- Queued photo previews -->
+        <div class="previews-block">
+          <div class="previews-header">
+            <span class="label">Queued photos</span>
+            <span id="preview-helper-text"></span>
+          </div>
+          <div id="preview-grid" class="preview-grid">
+            <div class="preview-empty">No photos queued yet.</div>
+          </div>
+        </div>
+
         <button id="done-btn">Done - upload photos and publish</button>
       </div>
     </div>
@@ -189,6 +278,8 @@
     const doneBtn = document.getElementById('done-btn');
     const searchInputEl = document.getElementById('search-input');
     const toastEl = document.getElementById('toast');
+    const previewGridEl = document.getElementById('preview-grid');
+    const previewHelperTextEl = document.getElementById('preview-helper-text');
 
     let allProducts = [];
     let toastTimeoutId = null;
@@ -299,6 +390,71 @@
       }
     }
 
+    function renderQueuedPhotos(photos) {
+      if (!previewGridEl) return;
+
+      if (!photos || !photos.length) {
+        previewGridEl.innerHTML = '<div class="preview-empty">No photos queued yet.</div>';
+        if (previewHelperTextEl) {
+          previewHelperTextEl.textContent = '';
+        }
+        return;
+      }
+
+      previewGridEl.innerHTML = '';
+      photos.forEach(photo => {
+        const item = document.createElement('div');
+        item.className = 'preview-item';
+
+        const thumbWrap = document.createElement('div');
+        thumbWrap.className = 'preview-thumb-wrapper';
+
+        const img = document.createElement('img');
+        img.src = photo.url;
+        img.alt = photo.name || 'Queued photo';
+
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'preview-remove';
+        removeBtn.textContent = '×';
+        removeBtn.title = 'Remove photo';
+        removeBtn.addEventListener('click', () => {
+          if (photo.relPath) {
+            removeQueuedPhoto(photo.relPath);
+          }
+        });
+
+        thumbWrap.appendChild(img);
+        thumbWrap.appendChild(removeBtn);
+
+        const nameEl = document.createElement('div');
+        nameEl.className = 'preview-name';
+        nameEl.textContent = photo.name || '';
+
+        item.appendChild(thumbWrap);
+        item.appendChild(nameEl);
+
+        previewGridEl.appendChild(item);
+      });
+
+      if (previewHelperTextEl) {
+        previewHelperTextEl.textContent = photos.length + ' photo' + (photos.length === 1 ? '' : 's');
+      }
+    }
+
+    async function loadQueuedPhotos() {
+      try {
+        const res = await fetch('/api/queued-photos');
+        if (!res.ok) {
+          return;
+        }
+        const data = await res.json();
+        const photos = data && Array.isArray(data.photos) ? data.photos : [];
+        renderQueuedPhotos(photos);
+      } catch (err) {
+        console.error('loadQueuedPhotos error', err);
+      }
+    }
+
     async function selectProduct(p) {
       try {
         await fetch('/api/select-product', {
@@ -311,6 +467,7 @@
           })
         });
         await loadCurrent();
+        await loadQueuedPhotos();
       } catch (err) {
         console.error('selectProduct error', err);
         alert('Failed to select product');
@@ -339,6 +496,27 @@
       }
     }
 
+    async function removeQueuedPhoto(relPath) {
+      try {
+        const res = await fetch('/api/remove-photo', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ relPath })
+        });
+        const json = await res.json();
+        if (!res.ok) {
+          const msg = json.error || 'Failed to remove photo';
+          alert(msg);
+          return;
+        }
+        await loadQueuedPhotos();
+        await loadCurrent();
+      } catch (err) {
+        console.error('removeQueuedPhoto error', err);
+        alert('Error removing photo');
+      }
+    }
+
     async function doneUpload() {
       try {
         const res = await fetch('/api/done', { method: 'POST' });
@@ -359,6 +537,7 @@
 
         await loadProducts();
         await loadCurrent();
+        await loadQueuedPhotos();
       } catch (err) {
         console.error('doneUpload error', err);
         alert('Error uploading images');
@@ -372,11 +551,15 @@
       searchInputEl.addEventListener('input', updateProductListFromSearch);
     }
 
-    // initial load plus poll current queue every few seconds
+    // initial load plus poll current queue and previews every few seconds
     window.addEventListener('load', () => {
       loadProducts();
       loadCurrent();
-      setInterval(loadCurrent, 5000);
+      loadQueuedPhotos();
+      setInterval(() => {
+        loadCurrent();
+        loadQueuedPhotos();
+      }, 5000);
     });
   </script>
 </body>
