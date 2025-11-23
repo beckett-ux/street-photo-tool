@@ -69,9 +69,14 @@ function archiveUploadedFiles(product, files) {
 
 // Middleware
 app.use(express.json());
+
+// Serve static files from project root
 app.use(express.static(__dirname));
 
-// API route, last 30 recently created products with no photos
+// Serve the Watch folder as /watch so the browser can render previews
+app.use('/watch', express.static(WATCH_DIR));
+
+// API route, last 100 recently created products with no photos
 app.get('/api/products-without-photos', async (req, res) => {
   console.log('GET /api/products-without-photos');
   try {
@@ -102,6 +107,68 @@ app.get('/api/current-product', (req, res) => {
     product: currentProduct,
     queuedCount: queuedFiles.length
   });
+});
+
+// Return queued photos with local URLs for preview
+app.get('/api/queued-photos', (req, res) => {
+  const photos = queuedFiles.map(filePath => {
+    // Compute path relative to WATCH_DIR
+    const relPath = path.relative(WATCH_DIR, filePath);
+    // Normalize to URL style slashes
+    const relWebPath = relPath.split(path.sep).join('/');
+    const url = '/watch/' + relWebPath;
+
+    return {
+      url,
+      name: path.basename(filePath),
+      relPath: relWebPath
+    };
+  });
+
+  res.json({ photos });
+});
+
+// Remove a single queued photo (and delete the file on disk)
+app.post('/api/remove-photo', (req, res) => {
+  const { relPath } = req.body || {};
+  if (!relPath) {
+    return res.status(400).json({ error: 'Missing relPath' });
+  }
+
+  const absPath = path.join(WATCH_DIR, relPath);
+  const normalizedAbs = path.normalize(absPath);
+
+  const index = queuedFiles.findIndex(p => path.normalize(p) === normalizedAbs);
+
+  if (index === -1) {
+    console.warn('Requested to remove photo not in queue:', relPath);
+    // Optionally also delete file if it exists
+    try {
+      if (fs.existsSync(normalizedAbs)) {
+        fs.unlinkSync(normalizedAbs);
+        console.log('Deleted file on disk that was not in queue:', normalizedAbs);
+      }
+    } catch (e) {
+      console.error('Error deleting file that was not in queue:', normalizedAbs, e);
+    }
+    return res.status(404).json({ error: 'Photo not found in queue' });
+  }
+
+  const [removedPath] = queuedFiles.splice(index, 1);
+
+  try {
+    if (fs.existsSync(removedPath)) {
+      fs.unlinkSync(removedPath);
+      console.log('Removed queued photo and deleted file:', removedPath);
+    } else {
+      console.log('Removed queued photo (file already gone):', removedPath);
+    }
+  } catch (e) {
+    console.error('Error deleting queued photo file', removedPath, e);
+    return res.status(500).json({ error: 'Failed to delete photo file' });
+  }
+
+  res.json({ ok: true });
 });
 
 // When user clicks Done, upload all queued images and publish
