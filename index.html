@@ -122,6 +122,28 @@
       margin-bottom: 16px;
       font-size: 13px;
     }
+
+    /* Toast notification */
+    .toast {
+      position: fixed;
+      bottom: 16px;
+      right: 16px;
+      background: #16a34a;
+      color: #fff;
+      padding: 10px 14px;
+      border-radius: 6px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+      font-size: 14px;
+      opacity: 0;
+      transform: translateY(8px);
+      pointer-events: none;
+      transition: opacity 0.2s ease, transform 0.2s ease;
+      z-index: 1000;
+    }
+    .toast.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
   </style>
 </head>
 <body>
@@ -129,6 +151,9 @@
   <div class="subtitle">
     This laptop should stay tethered to the camera saving files into the <strong>Watch</strong> folder.
   </div>
+
+  <!-- Toast notification -->
+  <div id="toast" class="toast"></div>
 
   <div class="layout">
     <!-- LEFT: products list -->
@@ -163,8 +188,10 @@
     const refreshBtn = document.getElementById('refresh-btn');
     const doneBtn = document.getElementById('done-btn');
     const searchInputEl = document.getElementById('search-input');
+    const toastEl = document.getElementById('toast');
 
     let allProducts = [];
+    let toastTimeoutId = null;
 
     const currentTitleEl = document.querySelector('#current-block .current-title');
     const currentMetaEl = document.querySelector('#current-block .current-meta');
@@ -178,6 +205,19 @@
       } catch {
         return iso;
       }
+    }
+
+    function showToast(message) {
+      if (!toastEl) return;
+      toastEl.textContent = message;
+      toastEl.classList.add('show');
+
+      if (toastTimeoutId) {
+        clearTimeout(toastTimeoutId);
+      }
+      toastTimeoutId = setTimeout(() => {
+        toastEl.classList.remove('show');
+      }, 3500);
     }
 
     function renderProductList(products) {
@@ -270,7 +310,7 @@
             created_at: p.created_at
           })
         });
-        await loadCurrent(); // update right side immediately
+        await loadCurrent();
       } catch (err) {
         console.error('selectProduct error', err);
         alert('Failed to select product');
@@ -304,10 +344,19 @@
         const res = await fetch('/api/done', { method: 'POST' });
         const json = await res.json();
         if (!res.ok) {
-          alert(json.error || 'Upload failed');
+          const msg = json.error || 'Upload failed';
+          alert(msg);
           return;
         }
-        alert('Uploaded and published. You can pick another product.');
+
+        // Clear the search field so the full list shows again
+        if (searchInputEl) {
+          searchInputEl.value = '';
+        }
+
+        // Show green success popup
+        showToast('Photos uploaded and product published. Ready for the next product.');
+
         await loadProducts();
         await loadCurrent();
       } catch (err) {
