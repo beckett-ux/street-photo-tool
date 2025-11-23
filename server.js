@@ -242,7 +242,6 @@ app.post('/api/reorder-photos', (req, res) => {
   }
 
   const normalize = p => path.normalize(p);
-
   const relToAbs = rel => path.resolve(WATCH_DIR, rel);
 
   const newQueued = [];
@@ -343,7 +342,24 @@ chokidar
     }
   });
 
+// Shutdown route for Close button
+app.post('/api/shutdown', (req, res) => {
+  console.log('Shutdown requested from UI');
+  res.json({ ok: true });
+
+  server.close(() => {
+    console.log('HTTP server closed');
+    process.exit(0);
+  });
+
+  // Safety timer in case close hangs
+  setTimeout(() => {
+    console.log('Forcing shutdown');
+    process.exit(0);
+  }, 3000);
+});
+
 // Start the server
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`Street photo tool running at http://localhost:${PORT}`);
 });
