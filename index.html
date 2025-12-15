@@ -208,71 +208,6 @@
       background: #b91c1c;
     }
 
-    /* Store splash */
-    .splash-backdrop {
-      position: fixed;
-      inset: 0;
-      background: rgba(15, 23, 42, 0.6);
-      display: none;
-      align-items: center;
-      justify-content: center;
-      z-index: 2000;
-    }
-
-    .splash-modal {
-      background: #ffffff;
-      border-radius: 16px;
-      padding: 24px 28px;
-      max-width: 420px;
-      width: 90%;
-      box-shadow: 0 20px 45px rgba(15, 23, 42, 0.35);
-      text-align: center;
-      border: 1px solid #e5e7eb;
-    }
-
-    .splash-title {
-      font-size: 20px;
-      font-weight: 600;
-      margin-bottom: 8px;
-      color: #111827;
-    }
-
-    .splash-subtitle {
-      font-size: 14px;
-      color: #4b5563;
-      margin-bottom: 20px;
-    }
-
-    .splash-buttons {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      margin-bottom: 10px;
-    }
-
-    .splash-btn {
-      width: 100%;
-      font-size: 16px;
-      padding: 14px 18px;
-    }
-
-    .splash-link {
-      background: none;
-      border-radius: 0;
-      box-shadow: none;
-      padding: 0;
-      font-size: 13px;
-      color: #0f766e;
-      text-decoration: underline;
-    }
-
-    .splash-link:hover:not(:disabled) {
-      background: none;
-      box-shadow: none;
-      transform: none;
-      color: #115e59;
-    }
-
     /* Right side current product panel */
     #current-block {
       margin-bottom: 10px;
@@ -463,33 +398,12 @@
   </style>
 </head>
 <body>
-  <!-- Store selection splash (first load per session) -->
-  <div id="store-splash" class="splash-backdrop">
-    <div class="splash-modal">
-      <div class="splash-title">Choose your store</div>
-      <div class="splash-subtitle">
-        Pick the location for this session so we only show products for that store.
-      </div>
-      <div class="splash-buttons">
-        <button type="button" class="splash-btn" data-store="DMV">
-          DC Store
-        </button>
-        <button type="button" class="splash-btn" data-store="CLT">
-          Charlotte Store
-        </button>
-      </div>
-      <button type="button" class="splash-link" data-store="ALL">
-        Show all items
-      </button>
-    </div>
-  </div>
-
   <div class="page">
     <button id="close-btn" class="close-btn">Close</button>
 
     <div class="logo-wrap">
       <img
-        src="https://streetcommerce.shop/cdn/shop/files/64b7cc5bd29c585c54174034_back_graphic_copy2-p-500.png?v=1709318626&width=200"
+        src="https://i.imgur.com/obL9hge.png"
         alt="Street Commerce logo"
         class="logo-img"
       />
@@ -559,19 +473,12 @@
     const previewHelperTextEl = document.getElementById('preview-helper-text');
     const closeBtn = document.getElementById('close-btn');
 
-    const splashEl = document.getElementById('store-splash');
-    const splashStoreButtons = document.querySelectorAll('[data-store]');
-
     let allProducts = [];
     let toastTimeoutId = null;
 
     const currentTitleEl = document.querySelector('#current-block .current-title');
     const currentMetaEl = document.querySelector('#current-block .current-meta');
     const queueCountEl = document.getElementById('queue-count');
-
-    // Store selection
-    let selectedStore = null; // DMV, CLT, or ALL
-    let appStarted = false;
 
     // Drag and drop ordering
     let queuedPhotos = [];
@@ -704,13 +611,7 @@
     async function loadProducts() {
       productListEl.innerHTML = '<div class="product-empty">Loading...</div>';
       try {
-        const params = new URLSearchParams();
-        if (selectedStore) {
-          params.set('store', selectedStore);
-        }
-        const url = '/api/products-without-photos' + (params.toString() ? `?${params.toString()}` : '');
-
-        const res = await fetch(url);
+        const res = await fetch('/api/products-without-photos');
         if (!res.ok) throw new Error('HTTP ' + res.status);
         const products = await res.json();
 
@@ -869,7 +770,7 @@
           .map(p => p.relPath)
           .filter(Boolean);
 
-        if (!order.length) return;
+      if (!order.length) return;
 
         const res = await fetch('/api/reorder-photos', {
           method: 'POST',
@@ -1004,21 +905,6 @@
       }, 300);
     }
 
-    function startAppOnce() {
-      if (appStarted) return;
-      appStarted = true;
-
-      loadProducts();
-      loadCurrent();
-      loadQueuedPhotos();
-
-      setInterval(() => {
-        loadCurrent();
-        loadQueuedPhotos();
-      }, 5000);
-    }
-
-    // Events
     refreshBtn.addEventListener('click', loadProducts);
     doneBtn.addEventListener('click', doneUpload);
 
@@ -1031,44 +917,13 @@
     }
 
     window.addEventListener('load', () => {
-      // Restore store selection from session if present
-      try {
-        const stored = window.sessionStorage.getItem('scPhotoToolStore');
-        if (stored) {
-          selectedStore = stored;
-          if (splashEl) {
-            splashEl.style.display = 'none';
-          }
-          startAppOnce();
-        } else if (splashEl) {
-          splashEl.style.display = 'flex';
-        }
-      } catch (e) {
-        console.error('sessionStorage read error', e);
-        if (splashEl) {
-          splashEl.style.display = 'flex';
-        }
-      }
-
-      // Attach handlers for splash store buttons and link
-      splashStoreButtons.forEach(btn => {
-        btn.addEventListener('click', () => {
-          const storeCode = btn.getAttribute('data-store') || 'ALL';
-          selectedStore = storeCode;
-
-          try {
-            window.sessionStorage.setItem('scPhotoToolStore', storeCode);
-          } catch (e) {
-            console.error('sessionStorage write error', e);
-          }
-
-          if (splashEl) {
-            splashEl.style.display = 'none';
-          }
-
-          startAppOnce();
-        });
-      });
+      loadProducts();
+      loadCurrent();
+      loadQueuedPhotos();
+      setInterval(() => {
+        loadCurrent();
+        loadQueuedPhotos();
+      }, 5000);
     });
   </script>
 </body>
