@@ -3,6 +3,14 @@ const path = require('path');
 
 const PATHS_FILE = path.join(__dirname, 'paths.txt');
 
+function parseStoreList(value) {
+  if (!value) return [];
+  return value
+    .split('|')
+    .map(entry => entry.trim())
+    .filter(Boolean);
+}
+
 function loadPaths() {
   if (!fs.existsSync(PATHS_FILE)) {
     return {};
@@ -29,6 +37,7 @@ function loadPaths() {
     entries[key] = value;
   }
 
+  entries.STORES_LIST = parseStoreList(entries.STORES);
   return entries;
 }
 
