@@ -294,7 +294,12 @@ async function getRecentProductsWithoutImages(limit = 30) {
 
   const nonArchived = all.filter(p => (p.status || '').toLowerCase() !== 'archived');
 
-  const withoutImages = nonArchived.filter(p => !p.images || p.images.length === 0);
+  const inStock = nonArchived.filter(p => {
+    if (!Array.isArray(p.variants) || p.variants.length === 0) return false;
+    return p.variants.some(variant => Number(variant.inventory_quantity) >= 1);
+  });
+
+  const withoutImages = inStock.filter(p => !p.images || p.images.length === 0);
 
   console.log('Products with no images (before sort):', withoutImages.length);
 
