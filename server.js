@@ -19,53 +19,24 @@ const WATCH_DIR = (process.env.WATCH_FOLDER || process.env.PHOTO_WATCH_DIR)
   ? path.resolve(process.env.WATCH_FOLDER || process.env.PHOTO_WATCH_DIR)
   : path.join(__dirname, 'Watch');
 
-// Folder where we archive uploaded photos
-const UPLOADED_DIR = (process.env.UPLOADED_PHOTOS_FOLDER)
-  ? path.resolve(process.env.UPLOADED_PHOTOS_FOLDER)
-  : path.join(__dirname, 'Uploaded Photos');
-
-// Folder where we write normalized + square-cropped versions for upload
-const CROPPED_DIR = path.join(__dirname, 'CroppedTemp');
-
 const JPEG_QUALITY = 92;
 
 let currentProduct = null;    // { id, title, sku, created_at }
 let queuedFiles = [];         // absolute file paths for current product
 
-function sanitizeFolderName(name) {
-  if (!name || typeof name !== 'string') return 'product';
-  let cleaned = name.replace(/[<>:"/\\|?*]/g, '');
-  cleaned = cleaned.replace(/\s+/g, ' ').trim();
-  if (!cleaned) cleaned = 'product';
-  if (cleaned.length > 60) cleaned = cleaned.slice(0, 60);
-  return cleaned;
-}
-
-function archiveUploadedFiles(product, files) {
-  if (!product || !files || files.length === 0) return;
-
-  const folderName = sanitizeFolderName(product.title);
-  const destDir = path.join(UPLOADED_DIR, folderName);
-
-  try {
-    fs.mkdirSync(destDir, { recursive: true });
-  } catch (e) {
-    console.error('Could not create archive folder', destDir, e);
-    return;
-  }
+function deleteUploadedFiles(files) {
+  if (!files || files.length === 0) return;
 
   files.forEach(filePath => {
     try {
       if (!fs.existsSync(filePath)) {
-        console.warn('File missing when archiving, skipping', filePath);
+        console.warn('File missing when deleting, skipping', filePath);
         return;
       }
-      const fileName = path.basename(filePath);
-      const destPath = path.join(destDir, fileName);
-      fs.renameSync(filePath, destPath);
-      console.log('Archived file to', destPath);
+      fs.unlinkSync(filePath);
+      console.log('Deleted uploaded file', filePath);
     } catch (e) {
-      console.error('Error archiving file', filePath, e);
+      console.error('Error deleting file', filePath, e);
     }
   });
 }
@@ -74,11 +45,9 @@ function archiveUploadedFiles(product, files) {
 // This removes EXIF orientation so Shopify displays correctly.
 async function cropImageToSquare(filePath) {
   try {
-    await fs.promises.mkdir(CROPPED_DIR, { recursive: true });
-
     const ext = path.extname(filePath);
     const baseName = path.basename(filePath, ext);
-    const outPath = path.join(CROPPED_DIR, `${baseName}-square.jpg`);
+    const filename = `${baseName}-square.jpg`;
 
     const meta = await sharp(filePath).metadata();
     const width = meta.width;
@@ -86,11 +55,11 @@ async function cropImageToSquare(filePath) {
 
     if (!width || !height) {
       console.warn('Cannot read image dimensions, normalizing without crop for', filePath);
-      await sharp(filePath)
+      const buffer = await sharp(filePath)
         .rotate()
         .jpeg({ quality: JPEG_QUALITY })
-        .toFile(outPath);
-      return outPath;
+        .toBuffer();
+      return { filename, buffer };
     }
 
     // metadata.width/height are from the file as-stored. If EXIF orientation rotates 90/270,
@@ -114,16 +83,22 @@ async function cropImageToSquare(filePath) {
       pipeline = pipeline.extract({ left, top, width: size, height: size });
     }
 
-    await pipeline
+    const buffer = await pipeline
       .jpeg({ quality: JPEG_QUALITY })
-      .toFile(outPath);
+      .toBuffer();
 
-    console.log('Normalized + square image saved to', outPath);
-    return outPath;
+    console.log('Normalized + square image prepared for upload:', filename);
+    return { filename, buffer };
   } catch (err) {
     console.error('Error normalizing/cropping image for', filePath, err);
     // Fall back to original if processing fails
-    return filePath;
+    try {
+      const buffer = await fs.promises.readFile(filePath);
+      return { filename: path.basename(filePath), buffer };
+    } catch (readErr) {
+      console.error('Error reading original image after crop failure', filePath, readErr);
+      throw readErr;
+    }
   }
 }
 
@@ -250,16 +225,16 @@ app.post('/api/done', async (req, res) => {
   if (queuedFiles.length === 0) return res.status(400).json({ error: 'No files queued' });
 
   const productId = currentProduct.id;
-  const filesToArchive = [...queuedFiles];
+  const filesToDelete = [...queuedFiles];
 
   try {
     console.log(`Normalizing + cropping ${queuedFiles.length} images for product ${productId}`);
-    const croppedPaths = await Promise.all(queuedFiles.map(cropImageToSquare));
+    const croppedImages = await Promise.all(queuedFiles.map(cropImageToSquare));
 
-    console.log(`Uploading ${croppedPaths.length} images for product ${productId}`);
-    await uploadImagesToProduct(productId, croppedPaths);
+    console.log(`Uploading ${croppedImages.length} images for product ${productId}`);
+    await uploadImagesToProduct(productId, croppedImages);
 
-    archiveUploadedFiles(currentProduct, filesToArchive);
+    deleteUploadedFiles(filesToDelete);
 
     currentProduct = null;
     queuedFiles = [];

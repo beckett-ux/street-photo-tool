@@ -306,27 +306,40 @@ async function getRecentProductsWithoutImages(limit = 30) {
   return top;
 }
 
-async function uploadImagesToProduct(productId, localFilePaths) {
+async function uploadImagesToProduct(productId, images) {
   const allowedExts = ['.jpg', '.jpeg', '.png', '.heic'];
 
-  for (const filePath of localFilePaths) {
-    if (!fs.existsSync(filePath)) {
-      console.warn('File missing, skipping', filePath);
+  for (const image of images) {
+    const filePath = typeof image === 'string' ? image : image && image.filePath;
+    const filename = typeof image === 'string'
+      ? path.basename(image)
+      : image && image.filename;
+    const buffer = image && image.buffer;
+
+    const ext = filename ? path.extname(filename).toLowerCase() : null;
+    if (!ext || !allowedExts.includes(ext)) {
+      console.log('Skipping non image file during upload', filename || filePath);
       continue;
     }
 
-    const ext = path.extname(filePath).toLowerCase();
-    if (!allowedExts.includes(ext)) {
-      console.log('Skipping non image file during upload', filePath);
+    let base64 = null;
+    if (buffer) {
+      base64 = buffer.toString('base64');
+    } else if (filePath) {
+      if (!fs.existsSync(filePath)) {
+        console.warn('File missing, skipping', filePath);
+        continue;
+      }
+      base64 = fs.readFileSync(filePath, { encoding: 'base64' });
+    } else {
+      console.warn('No image data provided, skipping');
       continue;
     }
-
-    const base64 = fs.readFileSync(filePath, { encoding: 'base64' });
 
     const body = {
       image: {
         attachment: base64,
-        filename: path.basename(filePath)
+        filename
       }
     };
 
