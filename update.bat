@@ -41,6 +41,12 @@ if not exist "%PROJECT_ROOT%" (
   exit /b 1
 )
 
+if not exist "%PROJECT_ROOT%" (
+  echo PROJECT_ROOT does not exist: %PROJECT_ROOT%
+  pause
+  exit /b 1
+)
+
 cd /d "%PROJECT_ROOT%" || (
   echo Failed to cd into %PROJECT_ROOT%.
   pause
@@ -62,12 +68,35 @@ if exist "paths.txt" (
   copy /y "paths.txt" "%PATHS_BACKUP%" >nul
 )
 
+set "DIRTY="
+for /f %%G in ('git status --porcelain') do (
+  set "DIRTY=1"
+  goto :dirty_done
+)
+
+if defined DIRTY (
+  echo Local changes detected. Stashing before update...
+  git stash push -u -m "auto-stash before update"
+  if not "%errorlevel%"=="0" (
+    echo Failed to stash local changes.
+    if exist "%PATHS_BACKUP%" copy /y "%PATHS_BACKUP%" "paths.txt" >nul
+    pause
+    exit /b 1
+  )
+  set "STASHED=1"
+)
+
 git pull --ff-only
 if not "%errorlevel%"=="0" (
   echo Failed to pull latest changes.
   if exist "%PATHS_BACKUP%" copy /y "%PATHS_BACKUP%" "paths.txt" >nul
   pause
   exit /b 1
+)
+
+if defined STASHED (
+  echo Restoring local changes...
+  git stash pop
 )
 
 if exist "%PATHS_BACKUP%" (
