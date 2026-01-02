@@ -61,17 +61,21 @@ if not exist "package.json" (
   call :fail "package.json not found in %PROJECT_ROOT%. Check PROJECT_ROOT in paths.txt."
 )
 
-echo Installing any new dependencies (this may take a few minutes)...
-echo If this appears idle, npm may still be working. Press Ctrl+C to cancel.
 echo Node version:
 node --version
 echo npm version:
 npm --version
-set "NPM_CONFIG_PROGRESS=true"
-call npm install --no-audit --no-fund --loglevel=info
 
-if not "%errorlevel%"=="0" (
-  call :fail "npm install failed. See errors above."
+if exist "node_modules" (
+  echo node_modules already exists. Skipping npm install.
+) else (
+  echo Installing dependencies (first run may take a few minutes)...
+  echo If this appears idle, npm may still be working. Press Ctrl+C to cancel.
+  set "NPM_CONFIG_PROGRESS=true"
+  call npm install --no-audit --no-fund --loglevel=info
+  if not "%errorlevel%"=="0" (
+    call :fail "npm install failed. See errors above."
+  )
 )
 
 echo Dependencies installed successfully.
