@@ -63,8 +63,12 @@ if not exist "package.json" (
 
 echo Installing any new dependencies (this may take a few minutes)...
 echo If this appears idle, npm may still be working. Press Ctrl+C to cancel.
+echo Node version:
+node --version
+echo npm version:
+npm --version
 set "NPM_CONFIG_PROGRESS=true"
-call npm install --no-audit --no-fund
+call npm install --no-audit --no-fund --loglevel=info
 
 if not "%errorlevel%"=="0" (
   call :fail "npm install failed. See errors above."
