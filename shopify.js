@@ -146,10 +146,16 @@ async function getRequiredPublicationIds() {
 
 async function getLocations() {
   if (cachedLocations && cachedLocations.length) return cachedLocations;
-  const json = await shopifyRest('/locations.json');
-  const locations = Array.isArray(json.locations) ? json.locations : [];
-  cachedLocations = locations;
-  return locations;
+  try {
+    const json = await shopifyRest('/locations.json');
+    const locations = Array.isArray(json.locations) ? json.locations : [];
+    cachedLocations = locations;
+    return locations;
+  } catch (err) {
+    console.warn('Unable to load Shopify locations (missing read_locations scope?)');
+    cachedLocations = [];
+    return [];
+  }
 }
 
 function normalizeStoreName(name) {
