@@ -87,6 +87,31 @@
       margin-bottom: 10px;
     }
 
+    .filter-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .filter-row label {
+      font-size: 12px;
+      color: #4b5563;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    #store-select {
+      flex: 1;
+      padding: 7px 10px;
+      font-size: 13px;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      background: #ffffff;
+      color: #111827;
+      box-sizing: border-box;
+    }
+
     #search-input {
       width: 100%;
       padding: 8px 10px;
@@ -424,6 +449,12 @@
             <input id="search-input" type="text" placeholder="Search by title, SKU, or id" />
             <button id="refresh-btn">Refresh</button>
           </div>
+          <div class="filter-row" id="store-row">
+            <label for="store-select">Store</label>
+            <select id="store-select">
+              <option value="">All stores</option>
+            </select>
+          </div>
           <div id="product-list"></div>
         </div>
       </div>
@@ -470,6 +501,8 @@
     const previewGridEl = document.getElementById('preview-grid');
     const previewHelperTextEl = document.getElementById('preview-helper-text');
     const closeBtn = document.getElementById('close-btn');
+    const storeSelectEl = document.getElementById('store-select');
+    const storeRowEl = document.getElementById('store-row');
 
     let allProducts = [];
     let toastTimeoutId = null;
@@ -609,7 +642,11 @@
     async function loadProducts() {
       productListEl.innerHTML = '<div class="product-empty">Loading...</div>';
       try {
-        const res = await fetch('/api/products-without-photos');
+        const storeName = storeSelectEl ? storeSelectEl.value : '';
+        const url = storeName
+          ? `/api/products-without-photos?store=${encodeURIComponent(storeName)}`
+          : '/api/products-without-photos';
+        const res = await fetch(url);
         if (!res.ok) throw new Error('HTTP ' + res.status);
         const products = await res.json();
 
@@ -626,6 +663,38 @@
         console.error('loadProducts error', err);
         productListEl.innerHTML =
           '<div class="product-empty">Error loading products. Check the Node console.</div>';
+      }
+    }
+
+    async function loadStores() {
+      if (!storeSelectEl || !storeRowEl) return;
+
+      try {
+        const res = await fetch('/api/stores');
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        const stores = Array.isArray(data.stores) ? data.stores : [];
+
+        if (!stores.length) {
+          storeRowEl.style.display = 'none';
+          return;
+        }
+
+        storeSelectEl.innerHTML = '';
+        const allOption = document.createElement('option');
+        allOption.value = '';
+        allOption.textContent = 'All stores';
+        storeSelectEl.appendChild(allOption);
+
+        stores.forEach(store => {
+          const option = document.createElement('option');
+          option.value = store;
+          option.textContent = store;
+          storeSelectEl.appendChild(option);
+        });
+      } catch (err) {
+        console.error('loadStores error', err);
+        storeRowEl.style.display = 'none';
       }
     }
 
@@ -910,11 +979,18 @@
       searchInputEl.addEventListener('input', updateProductListFromSearch);
     }
 
+    if (storeSelectEl) {
+      storeSelectEl.addEventListener('change', () => {
+        loadProducts();
+      });
+    }
+
     if (closeBtn) {
       closeBtn.addEventListener('click', handleCloseClick);
     }
 
     window.addEventListener('load', () => {
+      loadStores();
       loadProducts();
       loadCurrent();
       loadQueuedPhotos();

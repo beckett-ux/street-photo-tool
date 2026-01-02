@@ -110,10 +110,21 @@ async function cropImageToSquare(filePath) {
 app.use(express.json());
 app.use(express.static(__dirname));
 
+app.get('/api/stores', (req, res) => {
+  const stores = Array.isArray(localPaths.STORES_LIST) ? localPaths.STORES_LIST : [];
+  res.json({ stores });
+});
+
 app.get('/api/products-without-photos', async (req, res) => {
   console.log('GET /api/products-without-photos');
   try {
-    const products = await getRecentProductsWithoutImages(100);
+    const storeName = typeof req.query.store === 'string' ? req.query.store.trim() : '';
+    const storeLocationId =
+      storeName && localPaths.STORES_MAP ? localPaths.STORES_MAP[storeName] : null;
+    const products = await getRecentProductsWithoutImages(100, {
+      storeName: storeName || null,
+      storeLocationId: storeLocationId || null
+    });
     res.json(products);
   } catch (err) {
     console.error('Error in /api/products-without-photos', err);
