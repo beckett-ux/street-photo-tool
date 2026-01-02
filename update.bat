@@ -42,55 +42,37 @@ if not exist "%PROJECT_ROOT%" (
 )
 
 cd /d "%PROJECT_ROOT%" || (
-  call :fail "Failed to cd into %PROJECT_ROOT%"
+  echo Failed to cd into %PROJECT_ROOT%.
+  pause
+  exit /b 1
 )
 
 echo Updating from GitHub...
 
 if not exist ".git" (
-  if not defined REPO_URL (
-    echo .git not found in %PROJECT_ROOT%.
-    echo Please add REPO_URL=... to %PATHS_FILE% so this script can clone the repo.
-    pause
-    exit /b 1
-  )
-  echo No git repo found. Re-cloning from %REPO_URL%...
-  cd /d "%SCRIPT_DIR%" || (
-    echo Failed to cd into %SCRIPT_DIR%.
-    pause
-    exit /b 1
-  )
-  rd /s /q "%PROJECT_ROOT%"
-  git clone "%REPO_URL%" "%PROJECT_ROOT%"
-  if not "%errorlevel%"=="0" (
-    echo Failed to clone repository.
-    pause
-    exit /b 1
-  )
-  echo Update complete.
-  pause
-  exit /b 0
-)
-
-git reset --hard
-if not "%errorlevel%"=="0" (
-  echo Failed to reset local changes.
+  echo .git not found in %PROJECT_ROOT%.
+  echo This updater only works inside a git clone. Please clone:
+  echo %REPO_URL%
   pause
   exit /b 1
 )
 
-git clean -fd
-if not "%errorlevel%"=="0" (
-  echo Failed to clean untracked files.
-  pause
-  exit /b 1
+set "PATHS_BACKUP=%PROJECT_ROOT%\\paths.txt.localbackup"
+if exist "paths.txt" (
+  copy /y "paths.txt" "%PATHS_BACKUP%" >nul
 )
 
-git pull
+git pull --ff-only
 if not "%errorlevel%"=="0" (
   echo Failed to pull latest changes.
+  if exist "%PATHS_BACKUP%" copy /y "%PATHS_BACKUP%" "paths.txt" >nul
   pause
   exit /b 1
+)
+
+if exist "%PATHS_BACKUP%" (
+  copy /y "%PATHS_BACKUP%" "paths.txt" >nul
+  del /f /q "%PATHS_BACKUP%" >nul 2>&1
 )
 
 echo Update complete.
