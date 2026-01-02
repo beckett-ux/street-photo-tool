@@ -111,11 +111,30 @@ async function cropImageToSquare(filePath) {
 app.use(express.json());
 app.use(express.static(__dirname));
 
+function normalizeStoreName(name) {
+  return String(name || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
 app.get('/api/stores', async (req, res) => {
   try {
     const locations = await getActiveLocations();
     if (locations.length) {
-      const stores = locations.map(location => ({
+      const allowedStores = Array.isArray(localPaths.STORES_LIST) ? localPaths.STORES_LIST : [];
+      let filteredLocations = locations;
+
+      if (allowedStores.length) {
+        const allowedSet = new Set(allowedStores.map(normalizeStoreName).filter(Boolean));
+        filteredLocations = locations.filter(location => allowedSet.has(normalizeStoreName(location.name)));
+        if (!filteredLocations.length) {
+          const stores = allowedStores.map(name => ({ name }));
+          return res.json({ stores, source: 'paths' });
+        }
+      }
+
+      const stores = filteredLocations.map(location => ({
         id: location.id,
         name: location.name,
         city: location.city || null,
