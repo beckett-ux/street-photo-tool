@@ -4,6 +4,11 @@ REM Update these values on each machine.
 PROJECT_ROOT=C:\Users\becke\OneDrive\used content\Street Commerce\Photo Tool
 PHOTO_WATCH_DIR=C:\Path\To\Watch
 
+REM Store list for the UI drop-down (separate entries with |)
+REM Optional: add Shopify location IDs after a colon to avoid read_locations scope.
+REM Example: STORES=Washington, DC:123456789|Charlotte:987654321
+STORES=Washington, DC|Charlotte
+
 REM Add additional path keys below as needed, for example:
 REM ASSETS_DIR=C:\Path\To\Assets
 REM OUTPUT_DIR=C:\Path\To\Output
