@@ -22,46 +22,60 @@
       position: relative;
     }
 
-    .logo-wrap {
-      text-align: center;
-      margin-bottom: 8px;
+    .header-row {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      width: 100%;
+      max-width: 600px;
     }
 
     .logo-img {
-      max-width: 200px;
+      max-width: 100px;
       height: auto;
     }
 
-    h1 {
-      font-size: 28px;
-      margin: 8px 0 4px 0;
-      text-align: center;
+    .header-text {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .header-title {
+      display: flex;
+      align-items: baseline;
       color: #111827;
     }
 
-    .subtitle {
-      margin-bottom: 20px;
-      color: #4b5563;
-      font-size: 14px;
-      text-align: center;
+    .header-title .header-name {
+      font-size: 20px;
+      font-weight: 600;
     }
 
     .layout {
       display: flex;
-      gap: 20px;
+      gap: 12px;
       align-items: stretch;
     }
 
     .column {
       min-width: 320px;
+      display: flex;
+      justify-content: center;
     }
 
     .column-left {
-      flex: 0.55;
+      flex: 1;
     }
 
     .column-right {
-      flex: 0.45;
+      flex: 1;
     }
 
     .panel {
@@ -71,6 +85,8 @@
       box-shadow: 0 10px 25px rgba(15, 23, 42, 0.16);
       border: 1px solid #e5e7eb;
       box-sizing: border-box;
+      width: 100%;
+      max-width: 600px;
     }
 
     h2 {
@@ -231,19 +247,6 @@
       transform: none;
     }
 
-    .close-btn {
-      position: absolute;
-      top: 14px;
-      right: 14px;
-      padding: 6px 12px;
-      font-size: 12px;
-      background: #dc2626;
-    }
-
-    .close-btn:hover:not(:disabled) {
-      background: #b91c1c;
-    }
-
     /* Right side current product panel */
     #current-block {
       margin-bottom: 10px;
@@ -291,8 +294,8 @@
     }
 
     .preview-grid {
-      display: flex;
-      flex-wrap: wrap;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 12px;
       max-height: 420px;
       overflow-y: auto;
@@ -301,7 +304,7 @@
 
     .preview-item {
       position: relative;
-      width: 240px;
+      width: 100%;
       border-radius: 10px;
       border: 1px solid #e5e7eb;
       background: #ffffff;
@@ -429,23 +432,32 @@
       font-size: 12px;
       color: #9ca3af;
     }
+
+    .footer-note {
+      margin-top: 6px;
+      font-size: 11px;
+      color: #9ca3af;
+    }
   </style>
 </head>
 <body>
   <div class="page">
-    <button id="close-btn" class="close-btn">Close</button>
-
-    <div class="logo-wrap">
-      <img
-        src="https://i.imgur.com/obL9hge.png"
-        alt="Street Commerce logo"
-        class="logo-img"
-      />
-    </div>
-
-    <h1>Street Commerce Photo Tool</h1>
-    <div class="subtitle">
-      This laptop should stay tethered to the camera saving files into the folder configured in <strong>paths.txt</strong> (PHOTO_WATCH_DIR).
+    <div class="header-row">
+      <div class="column column-left">
+        <div class="header">
+          <img
+            src="https://i.imgur.com/obL9hge.png"
+            alt="Street Commerce logo"
+            class="logo-img"
+          />
+          <div class="header-text">
+            <div class="header-title">
+              <span class="header-name">Street Commerce Photo Tool</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="column column-right"></div>
     </div>
 
     <!-- Toast notification -->
@@ -501,6 +513,9 @@
 
     <div class="footer">
       Beta v1.0.1 by Beckett
+      <div class="footer-note">
+        This laptop should stay tethered to the camera saving files into the folder configured in <strong>paths.txt</strong> (PHOTO_WATCH_DIR).
+      </div>
     </div>
   </div>
 
@@ -512,7 +527,6 @@
     const toastEl = document.getElementById('toast');
     const previewGridEl = document.getElementById('preview-grid');
     const previewHelperTextEl = document.getElementById('preview-helper-text');
-    const closeBtn = document.getElementById('close-btn');
     const storeSelectEl = document.getElementById('store-select');
     const storeRowEl = document.getElementById('store-row');
     const productStatusEl = document.getElementById('product-status');
@@ -1012,24 +1026,6 @@
       }
     }
 
-    async function handleCloseClick() {
-      const confirmed = window.confirm('Are you sure you want to close the Street Commerce Photo Tool?');
-      if (!confirmed) return;
-
-      try {
-        await fetch('/api/shutdown', { method: 'POST' });
-      } catch (err) {
-        console.error('Error sending shutdown request', err);
-      }
-
-      // Browsers only let scripts close windows that were opened by script
-      // This may not always work if you opened the page directly
-      setTimeout(() => {
-        window.open('', '_self');
-        window.close();
-      }, 300);
-    }
-
     refreshBtn.addEventListener('click', loadProducts);
     doneBtn.addEventListener('click', doneUpload);
 
@@ -1042,10 +1038,6 @@
         saveStoreSelection(storeSelectEl.value);
         loadProducts();
       });
-    }
-
-    if (closeBtn) {
-      closeBtn.addEventListener('click', handleCloseClick);
     }
 
     window.addEventListener('load', () => {
