@@ -5,6 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const chokidar = require('chokidar');
 const sharp = require('sharp');
+const localPaths = require('./paths');
 
 const {
   getRecentProductsWithoutImages,
@@ -15,9 +16,13 @@ const app = express();
 const PORT = Number(process.env.PORT) || 3000;
 
 // Folder where employees drop files
-const WATCH_DIR = (process.env.WATCH_FOLDER || process.env.PHOTO_WATCH_DIR)
-  ? path.resolve(process.env.WATCH_FOLDER || process.env.PHOTO_WATCH_DIR)
-  : path.join(__dirname, 'Watch');
+const watchDirOverride = localPaths.PHOTO_WATCH_DIR;
+
+if (!watchDirOverride) {
+  throw new Error('PHOTO_WATCH_DIR is required in paths.txt');
+}
+
+const WATCH_DIR = path.resolve(watchDirOverride);
 
 const JPEG_QUALITY = 92;
 
