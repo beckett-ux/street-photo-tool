@@ -34,26 +34,30 @@ cd /d "%PROJECT_ROOT%" || (
 echo Stopping existing Node server if running...
 taskkill /IM node.exe /F >nul 2>&1
 
-echo Checking for local changes...
-set "DIRTY="
-for /f %%G in ('git status --porcelain') do (
-  set "DIRTY=1"
-  goto :dirty_done
-)
-:dirty_done
+if exist ".git" (
+  echo Checking for local changes...
+  set "DIRTY="
+  for /f %%G in ('git status --porcelain') do (
+    set "DIRTY=1"
+    goto :dirty_done
+  )
+  :dirty_done
 
-if defined DIRTY (
-  echo Local changes detected. Stashing before update...
-  git stash push -u -m "auto-stash before update"
-  set "STASHED=1"
-)
+  if defined DIRTY (
+    echo Local changes detected. Stashing before update...
+    git stash push -u -m "auto-stash before update"
+    set "STASHED=1"
+  )
 
-echo Pulling latest code from GitHub...
-git pull
+  echo Pulling latest code from GitHub...
+  git pull
 
-if defined STASHED (
-  echo Restoring stashed changes...
-  git stash pop
+  if defined STASHED (
+    echo Restoring stashed changes...
+    git stash pop
+  )
+) else (
+  echo Skipping git update because .git was not found in %PROJECT_ROOT%.
 )
 
 echo Installing any new dependencies...
