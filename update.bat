@@ -1,66 +1,80 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 
-REM Resolve directory of this script
+echo.
+echo === Street Photo Tool Update ===
+echo.
+
 set "SCRIPT_DIR=%~dp0"
 set "PATHS_FILE=%SCRIPT_DIR%paths.txt"
 
 if not exist "%PATHS_FILE%" (
-  echo Missing paths file: %PATHS_FILE%
-  echo Please create it using the template in paths.txt.
-  pause
-  exit /b 1
+  call :fail "Missing paths file: %PATHS_FILE%"
 )
 
-REM Load key=value pairs from paths file
+set "PROJECT_ROOT="
 for /f "usebackq tokens=1* delims==" %%A in ("%PATHS_FILE%") do (
-  set "key=%%A"
-  set "value=%%B"
-  if /I "!key!"=="PROJECT_ROOT" set "PROJECT_ROOT=!value!"
+  if /I "%%A"=="PROJECT_ROOT" set "PROJECT_ROOT=%%B"
 )
 
 if not defined PROJECT_ROOT (
-  echo PROJECT_ROOT is not set in %PATHS_FILE%.
-  pause
-  exit /b 1
+  call :fail "PROJECT_ROOT is not set in %PATHS_FILE%"
+)
+
+if not exist "%PROJECT_ROOT%" (
+  call :fail "PROJECT_ROOT does not exist: %PROJECT_ROOT%"
 )
 
 cd /d "%PROJECT_ROOT%" || (
-  echo Failed to cd into %PROJECT_ROOT%.
-  pause
-  exit /b 1
+  call :fail "Failed to cd into %PROJECT_ROOT%"
 )
+
+echo Using PROJECT_ROOT: %PROJECT_ROOT%
 
 echo Stopping existing Node server if running...
 taskkill /IM node.exe /F >nul 2>&1
 
-echo Checking for local changes...
-set "DIRTY="
-for /f %%G in ('git status --porcelain') do (
-  set "DIRTY=1"
-  goto :dirty_done
+echo Checking git repository...
+if exist ".git" (
+  where git >nul 2>&1
+  if "%errorlevel%"=="0" (
+    echo Pulling latest code from GitHub...
+    git pull
+  ) else (
+    echo Git not found in PATH. Skipping git update.
+  )
+) else (
+  echo .git not found. Skipping git update.
 )
-:dirty_done
 
-if defined DIRTY (
-  echo Local changes detected. Stashing before update...
-  git stash push -u -m "auto-stash before update"
-  set "STASHED=1"
+where npm >nul 2>&1
+if not "%errorlevel%"=="0" (
+  call :fail "npm is not available in PATH. Please install Node.js."
 )
 
-echo Pulling latest code from GitHub...
-git pull
-
-if defined STASHED (
-  echo Restoring stashed changes...
-  git stash pop
+where node >nul 2>&1
+if not "%errorlevel%"=="0" (
+  call :fail "node is not available in PATH. Please install Node.js."
 )
 
 echo Installing any new dependencies...
 npm install
 
+if not "%errorlevel%"=="0" (
+  call :fail "npm install failed. See errors above."
+)
+
 echo Starting server...
 start "" node server.js
 
+echo.
 echo Update complete.
 pause
+exit /b 0
+
+:fail
+  echo.
+  echo ERROR: %~1
+  echo.
+  pause
+  exit /b 1
