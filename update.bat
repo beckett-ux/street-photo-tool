@@ -22,7 +22,15 @@ if not defined REPO_URL (
 )
 
 if not defined PROJECT_ROOT (
-  echo PROJECT_ROOT is not set in %PATHS_FILE%.
+  call :fail "PROJECT_ROOT is not set in %PATHS_FILE%"
+)
+
+if not exist "%PROJECT_ROOT%" (
+  call :fail "PROJECT_ROOT does not exist: %PROJECT_ROOT%"
+)
+
+if not exist "%PROJECT_ROOT%" (
+  echo PROJECT_ROOT does not exist: %PROJECT_ROOT%
   pause
   exit /b 1
 )
@@ -34,9 +42,7 @@ if not exist "%PROJECT_ROOT%" (
 )
 
 cd /d "%PROJECT_ROOT%" || (
-  echo Failed to cd into %PROJECT_ROOT%.
-  pause
-  exit /b 1
+  call :fail "Failed to cd into %PROJECT_ROOT%"
 )
 
 echo Updating from GitHub...
@@ -89,3 +95,11 @@ if not "%errorlevel%"=="0" (
 
 echo Update complete.
 pause
+exit /b 0
+
+:fail
+  echo.
+  echo ERROR: %~1
+  echo.
+  pause
+  exit /b 1
