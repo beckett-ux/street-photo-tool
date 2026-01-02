@@ -112,6 +112,11 @@ app.use(express.json());
 app.use(express.static(__dirname));
 
 app.get('/api/stores', async (req, res) => {
+  const allowedStores = Array.isArray(localPaths.STORES_LIST) ? localPaths.STORES_LIST : [];
+  if (allowedStores.length) {
+    return res.json({ stores: allowedStores.map(name => ({ name })), source: 'paths' });
+  }
+
   try {
     const locations = await getActiveLocations();
     if (locations.length) {
