@@ -8,6 +8,7 @@ const sharp = require('sharp');
 const localPaths = require('./paths');
 
 const {
+  getActiveLocations,
   getRecentProductsWithoutImages,
   uploadImagesToProduct
 } = require('./shopify');
@@ -110,9 +111,25 @@ async function cropImageToSquare(filePath) {
 app.use(express.json());
 app.use(express.static(__dirname));
 
-app.get('/api/stores', (req, res) => {
+app.get('/api/stores', async (req, res) => {
+  try {
+    const locations = await getActiveLocations();
+    if (locations.length) {
+      const stores = locations.map(location => ({
+        id: location.id,
+        name: location.name,
+        city: location.city || null,
+        province: location.province || null,
+        country: location.country || null
+      }));
+      return res.json({ stores, source: 'shopify' });
+    }
+  } catch (err) {
+    console.warn('Failed to load Shopify locations, falling back to paths.txt', err.message);
+  }
+
   const stores = Array.isArray(localPaths.STORES_LIST) ? localPaths.STORES_LIST : [];
-  res.json({ stores });
+  res.json({ stores: stores.map(name => ({ name })), source: 'paths' });
 });
 
 app.get('/api/products-without-photos', async (req, res) => {
@@ -121,11 +138,11 @@ app.get('/api/products-without-photos', async (req, res) => {
     const storeName = typeof req.query.store === 'string' ? req.query.store.trim() : '';
     const storeLocationId =
       storeName && localPaths.STORES_MAP ? localPaths.STORES_MAP[storeName] : null;
-    const products = await getRecentProductsWithoutImages(100, {
+    const result = await getRecentProductsWithoutImages(100, {
       storeName: storeName || null,
       storeLocationId: storeLocationId || null
     });
-    res.json(products);
+    res.json(result);
   } catch (err) {
     console.error('Error in /api/products-without-photos', err);
     res.status(500).json({ error: 'Failed to load products' });
