@@ -22,6 +22,7 @@ const REQUIRED_PUBLICATION_NAMES = [
 ];
 
 let cachedPublicationIds = null;
+let cachedLocations = null;
 
 async function shopifyRest(pathPart, options = {}) {
   const url = `https://${shopDomain}/admin/api/${apiVersion}${pathPart}`;
@@ -141,6 +142,87 @@ async function getRequiredPublicationIds() {
 
   cachedPublicationIds = publicationIds;
   return publicationIds;
+}
+
+async function getLocations() {
+  if (cachedLocations && cachedLocations.length) return cachedLocations;
+  try {
+    const json = await shopifyRest('/locations.json');
+    const locations = Array.isArray(json.locations) ? json.locations : [];
+    cachedLocations = locations;
+    return locations;
+  } catch (err) {
+    console.warn('Unable to load Shopify locations (missing read_locations scope?)');
+    cachedLocations = [];
+    return [];
+  }
+}
+
+async function getActiveLocations() {
+  const locations = await getLocations();
+  return locations.filter(location => location && location.active);
+}
+
+function normalizeStoreName(name) {
+  return String(name || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function locationMatchesStore(location, storeName) {
+  if (!location) return false;
+  const target = normalizeStoreName(storeName);
+  if (!target) return false;
+
+  const fields = [
+    location.name,
+    location.city,
+    location.province,
+    location.country,
+    location.country_code,
+    location.province_code
+  ]
+    .filter(Boolean)
+    .map(value => normalizeStoreName(value))
+    .filter(Boolean);
+
+  if (fields.some(field => field === target)) return true;
+  if (fields.some(field => field.includes(target))) return true;
+  return target.split(' ').every(part => fields.some(field => field.includes(part)));
+}
+
+async function getLocationIdForStoreName(storeName) {
+  if (!storeName) return null;
+  const locations = await getLocations();
+  const match = locations.find(location => locationMatchesStore(location, storeName));
+
+  if (!match) {
+    console.warn('No Shopify location matched store name:', storeName);
+    return null;
+  }
+
+  return match.id;
+}
+
+async function getInventoryLevelsForLocation(inventoryItemIds, locationId) {
+  if (!inventoryItemIds.length || !locationId) return [];
+
+  const levels = [];
+  const chunkSize = 250;
+
+  for (let i = 0; i < inventoryItemIds.length; i += chunkSize) {
+    const chunk = inventoryItemIds.slice(i, i + chunkSize);
+    const params = new URLSearchParams({
+      inventory_item_ids: chunk.join(','),
+      location_ids: String(locationId)
+    });
+    const json = await shopifyRest(`/inventory_levels.json?${params.toString()}`);
+    const items = Array.isArray(json.inventory_levels) ? json.inventory_levels : [];
+    levels.push(...items);
+  }
+
+  return levels;
 }
 
 async function publishProductToDefaultSalesChannels(productId) {
@@ -287,28 +369,76 @@ function toSimpleProduct(p) {
   };
 }
 
-async function getRecentProductsWithoutImages(limit = 30) {
-  console.log('getRecentProductsWithoutImages: scanning products (max 1000)');
+async function getRecentProductsWithoutImages(limit = 30, options = {}) {
+  const storeName = options.storeName || null;
+  const storeLocationId = options.storeLocationId || null;
+  console.log('getRecentProductsWithoutImages: scanning products (max 1000)', storeName ? `for store "${storeName}"` : '');
 
   const all = await fetchAllProducts();
 
   const nonArchived = all.filter(p => (p.status || '').toLowerCase() !== 'archived');
 
-  const inStock = nonArchived.filter(p => {
-    if (!Array.isArray(p.variants) || p.variants.length === 0) return false;
-    return p.variants.some(variant => Number(variant.inventory_quantity) >= 1);
-  });
-
-  const withoutImages = inStock.filter(p => !p.images || p.images.length === 0);
+  const withoutImages = nonArchived.filter(p => !p.images || p.images.length === 0);
 
   console.log('Products with no images (before sort):', withoutImages.length);
 
-  withoutImages.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  let filtered = withoutImages;
+  let filterError = null;
+  const meta = {
+    scannedWithoutImages: withoutImages.length,
+    storeName: storeName || null,
+    locationId: null,
+    inventoryMatched: null
+  };
 
-  const top = withoutImages.slice(0, limit).map(toSimpleProduct);
+  if (storeName) {
+    const locationId = storeLocationId || await getLocationIdForStoreName(storeName);
+    if (!locationId) {
+      console.warn('Store filter requested but no matching location found:', storeName);
+      filterError = `No Shopify location matched store "${storeName}"`;
+      return { products: [], meta, error: filterError };
+    }
+
+    meta.locationId = locationId;
+    const inventoryItemIds = [];
+    const productInventoryMap = new Map();
+
+    filtered.forEach(product => {
+      const ids = (product.variants || [])
+        .map(variant => variant.inventory_item_id)
+        .filter(Boolean);
+      if (!ids.length) return;
+      productInventoryMap.set(product.id, ids);
+      inventoryItemIds.push(...ids);
+    });
+
+    const levels = await getInventoryLevelsForLocation(
+      Array.from(new Set(inventoryItemIds)),
+      locationId
+    );
+    const availableMap = new Map();
+    levels.forEach(level => {
+      availableMap.set(level.inventory_item_id, Number(level.available || 0));
+    });
+
+    filtered = filtered.filter(product => {
+      const ids = productInventoryMap.get(product.id) || [];
+      return ids.some(id => (availableMap.get(id) || 0) >= 1);
+    });
+    meta.inventoryMatched = filtered.length;
+  } else {
+    filtered = filtered.filter(p => {
+      if (!Array.isArray(p.variants) || p.variants.length === 0) return false;
+      return p.variants.some(variant => Number(variant.inventory_quantity) >= 1);
+    });
+  }
+
+  filtered.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+  const top = filtered.slice(0, limit).map(toSimpleProduct);
 
   console.log(`Returning ${top.length} most recent products with no images (limit ${limit})`);
-  return top;
+  return { products: top, meta, error: filterError };
 }
 
 async function uploadImagesToProduct(productId, images) {
@@ -372,6 +502,7 @@ async function uploadImagesToProduct(productId, images) {
 }
 
 module.exports = {
+  getActiveLocations,
   getRecentProductsWithoutImages,
   uploadImagesToProduct
 };

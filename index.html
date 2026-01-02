@@ -87,6 +87,31 @@
       margin-bottom: 10px;
     }
 
+    .filter-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .filter-row label {
+      font-size: 12px;
+      color: #4b5563;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    #store-select {
+      flex: 1;
+      padding: 7px 10px;
+      font-size: 13px;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      background: #ffffff;
+      color: #111827;
+      box-sizing: border-box;
+    }
+
     #search-input {
       width: 100%;
       padding: 8px 10px;
@@ -116,6 +141,17 @@
       max-height: 520px;
       overflow-y: auto;
       padding-right: 4px;
+    }
+
+    #product-status {
+      font-size: 12px;
+      color: #6b7280;
+      margin-bottom: 8px;
+    }
+
+    #product-status.error {
+      color: #b91c1c;
+      font-weight: 600;
     }
 
     .product-row {
@@ -424,6 +460,13 @@
             <input id="search-input" type="text" placeholder="Search by title, SKU, or id" />
             <button id="refresh-btn">Refresh</button>
           </div>
+          <div class="filter-row" id="store-row">
+            <label for="store-select">Store</label>
+            <select id="store-select">
+              <option value="">All stores</option>
+            </select>
+          </div>
+          <div id="product-status"></div>
           <div id="product-list"></div>
         </div>
       </div>
@@ -470,6 +513,9 @@
     const previewGridEl = document.getElementById('preview-grid');
     const previewHelperTextEl = document.getElementById('preview-helper-text');
     const closeBtn = document.getElementById('close-btn');
+    const storeSelectEl = document.getElementById('store-select');
+    const storeRowEl = document.getElementById('store-row');
+    const productStatusEl = document.getElementById('product-status');
 
     let allProducts = [];
     let toastTimeoutId = null;
@@ -606,14 +652,39 @@
       renderProductList(filtered);
     }
 
+    function setProductStatus(message, isError = false) {
+      if (!productStatusEl) return;
+      productStatusEl.textContent = message || '';
+      productStatusEl.classList.toggle('error', Boolean(isError));
+    }
+
     async function loadProducts() {
       productListEl.innerHTML = '<div class="product-empty">Loading...</div>';
+      setProductStatus('');
       try {
-        const res = await fetch('/api/products-without-photos');
+        const storeName = storeSelectEl ? storeSelectEl.value : '';
+        const url = storeName
+          ? `/api/products-without-photos?store=${encodeURIComponent(storeName)}`
+          : '/api/products-without-photos';
+        const res = await fetch(url);
         if (!res.ok) throw new Error('HTTP ' + res.status);
-        const products = await res.json();
+        const payload = await res.json();
+        const products = Array.isArray(payload) ? payload : payload.products;
+        const meta = payload && payload.meta ? payload.meta : null;
+        const error = payload && payload.error ? payload.error : null;
 
         allProducts = products || [];
+
+        if (error) {
+          setProductStatus(error, true);
+        } else if (meta && meta.storeName) {
+          const matched = typeof meta.inventoryMatched === 'number' ? meta.inventoryMatched : allProducts.length;
+          const scanned = typeof meta.scannedWithoutImages === 'number' ? meta.scannedWithoutImages : null;
+          const scannedText = scanned !== null ? ` (scanned ${scanned})` : '';
+          setProductStatus(`Showing ${matched} products for ${meta.storeName}${scannedText}.`);
+        } else {
+          setProductStatus('');
+        }
 
         if (!allProducts.length) {
           productListEl.innerHTML =
@@ -626,6 +697,39 @@
         console.error('loadProducts error', err);
         productListEl.innerHTML =
           '<div class="product-empty">Error loading products. Check the Node console.</div>';
+      }
+    }
+
+    async function loadStores() {
+      if (!storeSelectEl || !storeRowEl) return;
+
+      try {
+        const res = await fetch('/api/stores');
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        const stores = Array.isArray(data.stores) ? data.stores : [];
+
+        if (!stores.length) {
+          storeRowEl.style.display = 'none';
+          return;
+        }
+
+        storeSelectEl.innerHTML = '';
+        const allOption = document.createElement('option');
+        allOption.value = '';
+        allOption.textContent = 'All stores';
+        storeSelectEl.appendChild(allOption);
+
+        stores.forEach(store => {
+          const option = document.createElement('option');
+          const name = typeof store === 'string' ? store : store.name;
+          option.value = name;
+          option.textContent = name;
+          storeSelectEl.appendChild(option);
+        });
+      } catch (err) {
+        console.error('loadStores error', err);
+        storeRowEl.style.display = 'none';
       }
     }
 
@@ -910,11 +1014,18 @@
       searchInputEl.addEventListener('input', updateProductListFromSearch);
     }
 
+    if (storeSelectEl) {
+      storeSelectEl.addEventListener('change', () => {
+        loadProducts();
+      });
+    }
+
     if (closeBtn) {
       closeBtn.addEventListener('click', handleCloseClick);
     }
 
     window.addEventListener('load', () => {
+      loadStores();
       loadProducts();
       loadCurrent();
       loadQueuedPhotos();
