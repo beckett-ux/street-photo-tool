@@ -22,7 +22,15 @@ if not defined REPO_URL (
 )
 
 if not defined PROJECT_ROOT (
-  echo PROJECT_ROOT is not set in %PATHS_FILE%.
+  call :fail "PROJECT_ROOT is not set in %PATHS_FILE%"
+)
+
+if not exist "%PROJECT_ROOT%" (
+  call :fail "PROJECT_ROOT does not exist: %PROJECT_ROOT%"
+)
+
+if not exist "%PROJECT_ROOT%" (
+  echo PROJECT_ROOT does not exist: %PROJECT_ROOT%
   pause
   exit /b 1
 )
@@ -69,3 +77,11 @@ if exist "%PATHS_BACKUP%" (
 
 echo Update complete.
 pause
+exit /b 0
+
+:fail
+  echo.
+  echo ERROR: %~1
+  echo.
+  pause
+  exit /b 1
