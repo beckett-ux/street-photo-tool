@@ -22,11 +22,18 @@
       position: relative;
     }
 
+    .header-row {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
     .header {
       display: flex;
       align-items: center;
       gap: 12px;
-      margin-bottom: 16px;
+      width: 100%;
+      max-width: 600px;
     }
 
     .logo-img {
@@ -43,25 +50,17 @@
     .header-title {
       display: flex;
       align-items: baseline;
-      gap: 8px;
       color: #111827;
     }
 
-    .header-title .header-abbr {
-      font-size: 12px;
-      font-weight: 700;
-      letter-spacing: 0.08em;
-      color: #4b5563;
-    }
-
     .header-title .header-name {
-      font-size: 16px;
+      font-size: 20px;
       font-weight: 600;
     }
 
     .layout {
       display: flex;
-      gap: 20px;
+      gap: 12px;
       align-items: stretch;
     }
 
@@ -87,7 +86,7 @@
       border: 1px solid #e5e7eb;
       box-sizing: border-box;
       width: 100%;
-      max-width: 560px;
+      max-width: 600px;
     }
 
     h2 {
@@ -295,8 +294,8 @@
     }
 
     .preview-grid {
-      display: flex;
-      flex-wrap: wrap;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 12px;
       max-height: 420px;
       overflow-y: auto;
@@ -305,7 +304,7 @@
 
     .preview-item {
       position: relative;
-      width: 240px;
+      width: 100%;
       border-radius: 10px;
       border: 1px solid #e5e7eb;
       background: #ffffff;
@@ -443,18 +442,22 @@
 </head>
 <body>
   <div class="page">
-    <div class="header">
-      <img
-        src="https://i.imgur.com/obL9hge.png"
-        alt="Street Commerce logo"
-        class="logo-img"
-      />
-      <div class="header-text">
-        <div class="header-title">
-          <span class="header-abbr">SC</span>
-          <span class="header-name">Street Commerce Photo Tool</span>
+    <div class="header-row">
+      <div class="column column-left">
+        <div class="header">
+          <img
+            src="https://i.imgur.com/obL9hge.png"
+            alt="Street Commerce logo"
+            class="logo-img"
+          />
+          <div class="header-text">
+            <div class="header-title">
+              <span class="header-name">Street Commerce Photo Tool</span>
+            </div>
+          </div>
         </div>
       </div>
+      <div class="column column-right"></div>
     </div>
 
     <!-- Toast notification -->
