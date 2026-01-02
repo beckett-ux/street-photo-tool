@@ -25,12 +25,6 @@ if not exist "%PROJECT_ROOT%" (
   call :fail "PROJECT_ROOT does not exist: %PROJECT_ROOT%"
 )
 
-if not exist "%PROJECT_ROOT%" (
-  echo PROJECT_ROOT does not exist: %PROJECT_ROOT%
-  pause
-  exit /b 1
-)
-
 cd /d "%PROJECT_ROOT%" || (
   call :fail "Failed to cd into %PROJECT_ROOT%"
 )
@@ -63,18 +57,28 @@ if not "%errorlevel%"=="0" (
   call :fail "node is not available in PATH. Please install Node.js."
 )
 
-echo Installing any new dependencies...
-npm install
+if not exist "package.json" (
+  call :fail "package.json not found in %PROJECT_ROOT%. Check PROJECT_ROOT in paths.txt."
+)
+
+echo Installing any new dependencies (this may take a few minutes)...
+echo If this appears idle, npm may still be working. Press Ctrl+C to cancel.
+set "NPM_CONFIG_PROGRESS=true"
+call npm install --no-audit --no-fund
 
 if not "%errorlevel%"=="0" (
   call :fail "npm install failed. See errors above."
 )
 
-echo Starting server...
-start "" node server.js
+echo Dependencies installed successfully.
+echo.
+echo Starting server in this window...
+echo Press Ctrl+C to stop the server.
+echo.
+node server.js
 
 echo.
-echo Update complete.
+echo Server stopped.
 pause
 exit /b 0
 
