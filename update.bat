@@ -25,6 +25,12 @@ if not exist "%PROJECT_ROOT%" (
   call :fail "PROJECT_ROOT does not exist: %PROJECT_ROOT%"
 )
 
+if not exist "%PROJECT_ROOT%" (
+  echo PROJECT_ROOT does not exist: %PROJECT_ROOT%
+  pause
+  exit /b 1
+)
+
 cd /d "%PROJECT_ROOT%" || (
   call :fail "Failed to cd into %PROJECT_ROOT%"
 )
