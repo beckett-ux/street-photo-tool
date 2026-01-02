@@ -3,12 +3,31 @@ const path = require('path');
 
 const PATHS_FILE = path.join(__dirname, 'paths.txt');
 
-function parseStoreList(value) {
-  if (!value) return [];
-  return value
+function parseStoreConfig(value) {
+  if (!value) {
+    return { stores: [], storeMap: {} };
+  }
+
+  const stores = [];
+  const storeMap = {};
+
+  value
     .split('|')
     .map(entry => entry.trim())
-    .filter(Boolean);
+    .filter(Boolean)
+    .forEach(entry => {
+      const [namePart, idPart] = entry.split(':').map(part => part.trim());
+      if (!namePart) return;
+      stores.push(namePart);
+      if (idPart) {
+        const idNumber = Number(idPart);
+        if (!Number.isNaN(idNumber)) {
+          storeMap[namePart] = idNumber;
+        }
+      }
+    });
+
+  return { stores, storeMap };
 }
 
 function loadPaths() {
@@ -37,7 +56,9 @@ function loadPaths() {
     entries[key] = value;
   }
 
-  entries.STORES_LIST = parseStoreList(entries.STORES);
+  const parsedStores = parseStoreConfig(entries.STORES);
+  entries.STORES_LIST = parsedStores.stores;
+  entries.STORES_MAP = parsedStores.storeMap;
   return entries;
 }
 

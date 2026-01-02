@@ -349,6 +349,7 @@ function toSimpleProduct(p) {
 
 async function getRecentProductsWithoutImages(limit = 30, options = {}) {
   const storeName = options.storeName || null;
+  const storeLocationId = options.storeLocationId || null;
   console.log('getRecentProductsWithoutImages: scanning products (max 1000)', storeName ? `for store "${storeName}"` : '');
 
   const all = await fetchAllProducts();
@@ -362,7 +363,7 @@ async function getRecentProductsWithoutImages(limit = 30, options = {}) {
   let filtered = withoutImages;
 
   if (storeName) {
-    const locationId = await getLocationIdForStoreName(storeName);
+    const locationId = storeLocationId || await getLocationIdForStoreName(storeName);
     if (!locationId) {
       console.warn('Store filter requested but no matching location found:', storeName);
       return [];

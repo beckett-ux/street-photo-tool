@@ -119,8 +119,11 @@ app.get('/api/products-without-photos', async (req, res) => {
   console.log('GET /api/products-without-photos');
   try {
     const storeName = typeof req.query.store === 'string' ? req.query.store.trim() : '';
+    const storeLocationId =
+      storeName && localPaths.STORES_MAP ? localPaths.STORES_MAP[storeName] : null;
     const products = await getRecentProductsWithoutImages(100, {
-      storeName: storeName || null
+      storeName: storeName || null,
+      storeLocationId: storeLocationId || null
     });
     res.json(products);
   } catch (err) {
