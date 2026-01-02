@@ -516,6 +516,7 @@
     const storeSelectEl = document.getElementById('store-select');
     const storeRowEl = document.getElementById('store-row');
     const productStatusEl = document.getElementById('product-status');
+    const STORE_SELECTION_KEY = 'streetPhotoToolStore';
 
     let allProducts = [];
     let toastTimeoutId = null;
@@ -700,6 +701,20 @@
       }
     }
 
+    function getSavedStoreSelection() {
+      if (!window.localStorage) return '';
+      return window.localStorage.getItem(STORE_SELECTION_KEY) || '';
+    }
+
+    function saveStoreSelection(value) {
+      if (!window.localStorage) return;
+      if (value) {
+        window.localStorage.setItem(STORE_SELECTION_KEY, value);
+      } else {
+        window.localStorage.removeItem(STORE_SELECTION_KEY);
+      }
+    }
+
     async function loadStores() {
       if (!storeSelectEl || !storeRowEl) return;
 
@@ -727,6 +742,14 @@
           option.textContent = name;
           storeSelectEl.appendChild(option);
         });
+
+        const saved = getSavedStoreSelection();
+        if (saved) {
+          const hasOption = Array.from(storeSelectEl.options).some(option => option.value === saved);
+          if (hasOption) {
+            storeSelectEl.value = saved;
+          }
+        }
       } catch (err) {
         console.error('loadStores error', err);
         storeRowEl.style.display = 'none';
@@ -1016,6 +1039,7 @@
 
     if (storeSelectEl) {
       storeSelectEl.addEventListener('change', () => {
+        saveStoreSelection(storeSelectEl.value);
         loadProducts();
       });
     }
@@ -1025,14 +1049,16 @@
     }
 
     window.addEventListener('load', () => {
-      loadStores();
-      loadProducts();
-      loadCurrent();
-      loadQueuedPhotos();
-      setInterval(() => {
+      (async () => {
+        await loadStores();
+        loadProducts();
         loadCurrent();
         loadQueuedPhotos();
-      }, 5000);
+        setInterval(() => {
+          loadCurrent();
+          loadQueuedPhotos();
+        }, 5000);
+      })();
     });
   </script>
 </body>
