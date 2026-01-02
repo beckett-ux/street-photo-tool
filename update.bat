@@ -22,7 +22,21 @@ if not defined REPO_URL (
 )
 
 if not defined PROJECT_ROOT (
-  echo PROJECT_ROOT is not set in %PATHS_FILE%.
+  call :fail "PROJECT_ROOT is not set in %PATHS_FILE%"
+)
+
+if not exist "%PROJECT_ROOT%" (
+  call :fail "PROJECT_ROOT does not exist: %PROJECT_ROOT%"
+)
+
+if not exist "%PROJECT_ROOT%" (
+  echo PROJECT_ROOT does not exist: %PROJECT_ROOT%
+  pause
+  exit /b 1
+)
+
+if not exist "%PROJECT_ROOT%" (
+  echo PROJECT_ROOT does not exist: %PROJECT_ROOT%
   pause
   exit /b 1
 )
@@ -59,7 +73,6 @@ for /f %%G in ('git status --porcelain') do (
   set "DIRTY=1"
   goto :dirty_done
 )
-:dirty_done
 
 if defined DIRTY (
   echo Local changes detected. Stashing before update...
@@ -93,3 +106,11 @@ if exist "%PATHS_BACKUP%" (
 
 echo Update complete.
 pause
+exit /b 0
+
+:fail
+  echo.
+  echo ERROR: %~1
+  echo.
+  pause
+  exit /b 1
